@@ -5,19 +5,25 @@ import (
 	"reflect"
 )
 
+// ErrorHandling 定义了错误处理的方式
 type ErrorHandling int
 
+// ContinueOnError 忽略错误
 const (
 	ContinueOnError ErrorHandling = iota // 忽略错误
 	ExitOnError                          // 错误退出
 	PanicOnError                         // 崩溃退出
 )
 
+// Value 参数的值
 type Value interface {
+	// 返回一个字符串
 	String() string
+	// 设置一个字符串，返回一个错误
 	Set(string) error
 }
 
+// Flag 结构体定义了命令行参数的属性
 type Flag struct {
 	Name        string // 命令行名称
 	EnvName     string // 环境变量名称
@@ -39,6 +45,7 @@ func defaultUsage(f *FlagSet) {
 	f.PrintDefaults()
 }
 
+// isZeroValue 判断参数值是否为默认值
 func isZeroValue(flag *Flag, value string) bool {
 	typ := reflect.TypeOf(flag.Value)
 	var z reflect.Value
@@ -58,6 +65,7 @@ func isZeroValue(flag *Flag, value string) bool {
 	return false
 }
 
+// UnquoteUsage 解析参数的名称和帮助信息
 func UnquoteUsage(flag *Flag) (name string, usage string) {
 	// Look for a back-quoted name, but avoid the strings package.
 	usage = flag.Usage

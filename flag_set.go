@@ -162,15 +162,21 @@ func (f *FlagSet) failf(format string, a ...interface{}) error {
 	return err
 }
 
+// 定义默认的配置文件标志名
 var DefaultConfigFlagName = "c"
 
+// 解析参数
 func (f *FlagSet) Parse(arguments []string) error {
+	// 如果没有定义默认的配置文件标志名，则添加一个隐藏的标志名
 	if _, ok := f.formal[DefaultConfigFlagName]; !ok {
 		f.StringHiden(DefaultConfigFlagName, "", "默认读取的配置文件 如果参数没有值则会读取配置文件中的值")
 	}
 
+	// 标记已经解析过
 	f.parsed = true
+	// 保存参数
 	f.args = arguments
+	// 循环解析参数
 	for {
 		seen, err := f.parseOne()
 		if seen {
@@ -179,6 +185,7 @@ func (f *FlagSet) Parse(arguments []string) error {
 		if err == nil {
 			break
 		}
+		// 根据错误处理方式处理错误
 		switch f.errorHandling {
 		case ContinueOnError:
 			return err
@@ -191,22 +198,27 @@ func (f *FlagSet) Parse(arguments []string) error {
 
 	// 读取配置文件
 	var cFile string
+	// 如果定义了默认的配置文件标志名，则读取其值
 	if cf := f.formal[DefaultConfigFlagName]; cf != nil {
 		cFile = cf.Value.String()
 	}
+	// 如果实际解析时定义了默认的配置文件标志名，则读取其值
 	if cf := f.actual[DefaultConfigFlagName]; cf != nil {
 		cFile = cf.Value.String()
 	}
 
+	// 如果没有定义默认的配置文件标志名，则从未解析的参数中查找
 	if cFile == "" {
 		cFile = f.findConfigArgInUnresolved()
 	}
 
+	// 如果找到了配置文件，则进行解析
 	if cFile != "" {
 		_, err := os.Stat(cFile)
 		// 如果文件存在再进行解析
 		if err == nil {
 			if err := f.ParseFile(cFile, false); err != nil {
+				// 根据错误处理方式处理错误
 				switch f.errorHandling {
 				case ContinueOnError:
 					return err
@@ -264,6 +276,7 @@ func (f *FlagSet) ParseFile(config string, rewritevalue bool) error {
 	return nil
 }
 
+// 定义一个错误变量，表示帮助请求
 var ErrHelp = errors.New("flag: help requested")
 
 // 解析
