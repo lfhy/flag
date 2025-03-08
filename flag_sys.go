@@ -10,30 +10,34 @@ import (
 // 定义系统标志
 var sysflag = ArgsFlag{NewFlagSet(os.Args[0], ExitOnError)}
 
+func SetErrorHandling(h ErrorHandling) {
+	sysflag.SetErrorHandling(h)
+}
+
 // 解析命令行参数
-func Parse() {
-	sysflag.f.Parse(os.Args[1:])
+func Parse() error {
+	return sysflag.Parse()
 }
 
 // Bool类型定义
 // 定义一个布尔类型的标志，并设置其名称、标题、键、环境变量、默认值和用法
 func BoolFullVar(p *bool, name string, title, key, env string, value bool, usage string) {
-	sysflag.f.FullVar(newBoolValue(value, p), name, title, key, env, usage)
+	sysflag.FullVar(newBoolValue(value, p), name, title, key, env, usage)
 }
 
 // 定义一个布尔类型的标志，并设置其名称、标题、键、默认值和用法
 func BoolConfigVar(p *bool, name string, title, key string, value bool, usage string) {
-	sysflag.f.FullVar(newBoolValue(value, p), name, title, key, "", usage)
+	sysflag.FullVar(newBoolValue(value, p), name, title, key, "", usage)
 }
 
 // 定义一个布尔类型的标志，并设置其名称、环境变量、默认值和用法
 func BoolEnvVar(p *bool, name string, env string, value bool, usage string) {
-	sysflag.f.FullVar(newBoolValue(value, p), name, "", "", env, usage)
+	sysflag.FullVar(newBoolValue(value, p), name, "", "", env, usage)
 }
 
 // 定义一个布尔类型的标志，并设置其名称、默认值和用法
 func BoolVar(p *bool, name string, value bool, usage string) {
-	sysflag.f.Var(newBoolValue(value, p), name, usage)
+	sysflag.Var(newBoolValue(value, p), name, usage)
 }
 
 // 定义一个布尔类型的标志，并设置其名称、标题、键、环境变量、默认值和用法，并返回指针
@@ -67,22 +71,22 @@ func Bool(name string, value bool, usage string) *bool {
 // String类型定义
 // 定义一个字符串类型的标志，并设置其名称、标题、键、环境变量、默认值和用法
 func StringFullVar(p *string, name string, title, key, env string, value string, usage string) {
-	sysflag.f.FullVar(newStringValue(value, p), name, title, key, env, usage)
+	sysflag.FullVar(newStringValue(value, p), name, title, key, env, usage)
 }
 
 // 定义一个字符串类型的标志，并设置其名称、标题、键、默认值和用法
 func StringConfigVar(p *string, name string, title, key string, value string, usage string) {
-	sysflag.f.FullVar(newStringValue(value, p), name, title, key, "", usage)
+	sysflag.FullVar(newStringValue(value, p), name, title, key, "", usage)
 }
 
 // 定义一个字符串类型的标志，并设置其名称、环境变量、默认值和用法
 func StringEnvVar(p *string, name string, env string, value string, usage string) {
-	sysflag.f.FullVar(newStringValue(value, p), name, "", "", env, usage)
+	sysflag.FullVar(newStringValue(value, p), name, "", "", env, usage)
 }
 
 // 定义一个字符串类型的标志，并设置其名称、默认值和用法
 func StringVar(p *string, name string, value string, usage string) {
-	sysflag.f.Var(newStringValue(value, p), name, usage)
+	sysflag.Var(newStringValue(value, p), name, usage)
 }
 
 // 定义一个字符串类型的标志，并设置其名称、标题、键、环境变量、默认值和用法，并返回指针
@@ -116,22 +120,22 @@ func String(name string, value string, usage string) *string {
 // 浮点类型定义
 // 定义一个浮点类型的标志，并设置其名称、标题、键、环境变量、默认值和用法
 func Float64FullVar(p *float64, name string, title, key, env string, value float64, usage string) {
-	sysflag.f.FullVar(newFloat64Value(value, p), name, title, key, env, usage)
+	sysflag.FullVar(newFloat64Value(value, p), name, title, key, env, usage)
 }
 
 // 定义一个浮点类型的标志，并设置其名称、标题、键、默认值和用法
 func Float64ConfigVar(p *float64, name string, title, key string, value float64, usage string) {
-	sysflag.f.FullVar(newFloat64Value(value, p), name, title, key, "", usage)
+	sysflag.FullVar(newFloat64Value(value, p), name, title, key, "", usage)
 }
 
 // 定义一个浮点类型的标志，并设置其名称、环境变量、默认值和用法
 func Float64EnvVar(p *float64, name string, env string, value float64, usage string) {
-	sysflag.f.FullVar(newFloat64Value(value, p), name, "", "", env, usage)
+	sysflag.FullVar(newFloat64Value(value, p), name, "", "", env, usage)
 }
 
 // 定义一个浮点类型的标志，并设置其名称、默认值和用法
 func Float64Var(p *float64, name string, value float64, usage string) {
-	sysflag.f.Var(newFloat64Value(value, p), name, usage)
+	sysflag.Var(newFloat64Value(value, p), name, usage)
 }
 
 // 定义一个浮点类型的标志，并设置其名称、标题、键、环境变量、默认值和用法，并返回指针
@@ -165,22 +169,22 @@ func Float64(name string, value float64, usage string) *float64 {
 // 延迟定义
 // 定义一个延迟类型的标志，并设置其名称、标题、键、环境变量、默认值和用法
 func DurationFullVar(p *time.Duration, name string, title, key, env string, value time.Duration, usage string) {
-	sysflag.f.FullVar(newDurationValue(value, p), name, title, key, env, usage)
+	sysflag.FullVar(newDurationValue(value, p), name, title, key, env, usage)
 }
 
 // 定义一个延迟类型的标志，并设置其名称、标题、键、默认值和用法
 func DurationConfigVar(p *time.Duration, name string, title, key string, value time.Duration, usage string) {
-	sysflag.f.FullVar(newDurationValue(value, p), name, title, key, "", usage)
+	sysflag.FullVar(newDurationValue(value, p), name, title, key, "", usage)
 }
 
 // 定义一个延迟类型的标志，并设置其名称、环境变量、默认值和用法
 func DurationEnvVar(p *time.Duration, name string, env string, value time.Duration, usage string) {
-	sysflag.f.FullVar(newDurationValue(value, p), name, "", "", env, usage)
+	sysflag.FullVar(newDurationValue(value, p), name, "", "", env, usage)
 }
 
 // 定义一个延迟类型的标志，并设置其名称、默认值和用法
 func DurationVar(p *time.Duration, name string, value time.Duration, usage string) {
-	sysflag.f.Var(newDurationValue(value, p), name, usage)
+	sysflag.Var(newDurationValue(value, p), name, usage)
 }
 
 // 定义一个延迟类型的标志，并设置其名称、标题、键、环境变量、默认值和用法，并返回指针
@@ -214,22 +218,22 @@ func Duration(name string, value time.Duration, usage string) *time.Duration {
 // Int类型定义
 // 定义一个整型的标志，并设置其名称、标题、键、环境变量、默认值和用法
 func IntFullVar(p *int, name string, title, key, env string, value int, usage string) {
-	sysflag.f.FullVar(newIntValue(value, p), name, title, key, env, usage)
+	sysflag.FullVar(newIntValue(value, p), name, title, key, env, usage)
 }
 
 // 定义一个整型的标志，并设置其名称、标题、键、默认值和用法
 func IntConfigVar(p *int, name string, title, key string, value int, usage string) {
-	sysflag.f.FullVar(newIntValue(value, p), name, title, key, "", usage)
+	sysflag.FullVar(newIntValue(value, p), name, title, key, "", usage)
 }
 
 // 定义一个整型的标志，并设置其名称、环境变量、默认值和用法
 func IntEnvVar(p *int, name string, env string, value int, usage string) {
-	sysflag.f.FullVar(newIntValue(value, p), name, "", "", env, usage)
+	sysflag.FullVar(newIntValue(value, p), name, "", "", env, usage)
 }
 
 // 定义一个整型的标志，并设置其名称、默认值和用法
 func IntVar(p *int, name string, value int, usage string) {
-	sysflag.f.Var(newIntValue(value, p), name, usage)
+	sysflag.Var(newIntValue(value, p), name, usage)
 }
 
 // 定义一个整型的标志，并设置其名称、标题、键、环境变量、默认值和用法，并返回指针
@@ -263,22 +267,22 @@ func Int(name string, value int, usage string) *int {
 // Int64类型定义
 // 定义一个64位整型的标志，并设置其名称、标题、键、环境变量、默认值和用法
 func Int64FullVar(p *int64, name string, title, key, env string, value int64, usage string) {
-	sysflag.f.FullVar(newInt64Value(value, p), name, title, key, env, usage)
+	sysflag.FullVar(newInt64Value(value, p), name, title, key, env, usage)
 }
 
 // 定义一个64位整型的标志，并设置其名称、标题、键、默认值和用法
 func Int64ConfigVar(p *int64, name string, title, key string, value int64, usage string) {
-	sysflag.f.FullVar(newInt64Value(value, p), name, title, key, "", usage)
+	sysflag.FullVar(newInt64Value(value, p), name, title, key, "", usage)
 }
 
 // 定义一个64位整型的标志，并设置其名称、环境变量、默认值和用法
 func Int64EnvVar(p *int64, name string, env string, value int64, usage string) {
-	sysflag.f.FullVar(newInt64Value(value, p), name, "", "", env, usage)
+	sysflag.FullVar(newInt64Value(value, p), name, "", "", env, usage)
 }
 
 // 定义一个64位整型的标志，并设置其名称、默认值和用法
 func Int64Var(p *int64, name string, value int64, usage string) {
-	sysflag.f.Var(newInt64Value(value, p), name, usage)
+	sysflag.Var(newInt64Value(value, p), name, usage)
 }
 
 // 定义一个64位整型的标志，并设置其名称、标题、键、环境变量、默认值和用法，并返回指针
@@ -312,22 +316,22 @@ func Int64(name string, value int64, usage string) *int64 {
 // Uint类型定义
 // 定义一个无符号整型的标志，并设置其名称、标题、键、环境变量、默认值和用法
 func UintFullVar(p *uint, name string, title, key, env string, value uint, usage string) {
-	sysflag.f.FullVar(newUintValue(value, p), name, title, key, env, usage)
+	sysflag.FullVar(newUintValue(value, p), name, title, key, env, usage)
 }
 
 // 定义一个无符号整型的标志，并设置其名称、标题、键、默认值和用法
 func UintConfigVar(p *uint, name string, title, key string, value uint, usage string) {
-	sysflag.f.FullVar(newUintValue(value, p), name, title, key, "", usage)
+	sysflag.FullVar(newUintValue(value, p), name, title, key, "", usage)
 }
 
 // 定义一个无符号整型的标志，并设置其名称、环境变量、默认值和用法
 func UintEnvVar(p *uint, name string, env string, value uint, usage string) {
-	sysflag.f.FullVar(newUintValue(value, p), name, "", "", env, usage)
+	sysflag.FullVar(newUintValue(value, p), name, "", "", env, usage)
 }
 
 // 定义一个无符号整型的标志，并设置其名称、默认值和用法
 func UintVar(p *uint, name string, value uint, usage string) {
-	sysflag.f.Var(newUintValue(value, p), name, usage)
+	sysflag.Var(newUintValue(value, p), name, usage)
 }
 
 // 定义一个无符号整型的标志，并设置其名称、标题、键、环境变量、默认值和用法，并返回指针
@@ -361,23 +365,23 @@ func Uint(name string, value uint, usage string) *uint {
 // Uint64类型定义
 // 定义一个64位无符号整型的标志，并设置其名称、标题、键、环境变量、默认值和用法
 func Uint64FullVar(p *uint64, name string, title, key, env string, value uint64, usage string) {
-	sysflag.f.FullVar(newUint64Value(value, p), name, title, key, env, usage)
+	sysflag.FullVar(newUint64Value(value, p), name, title, key, env, usage)
 }
 
 // 定义64位无符号整型的标志，并设置其名称、标题、键、默认值和用法
 func Uint64ConfigVar(p *uint64, name string, title, key string, value uint64, usage string) {
-	sysflag.f.FullVar(newUint64Value(value, p), name, title, key, "", usage)
+	sysflag.FullVar(newUint64Value(value, p), name, title, key, "", usage)
 }
 
 // 定义一个64位无符号整型的标志，并设置其名称、环境变量、默认值和用法
 func Uint64EnvVar(p *uint64, name string, env string, value uint64, usage string) {
-	sysflag.f.FullVar(newUint64Value(value, p), name, "", "", env, usage)
+	sysflag.FullVar(newUint64Value(value, p), name, "", "", env, usage)
 }
 
 // Uint64Var函数用于将一个uint64类型的变量注册到命令行参数中
 func Uint64Var(p *uint64, name string, value uint64, usage string) {
 	// 将uint64类型的变量注册到命令行参数中
-	sysflag.f.Var(newUint64Value(value, p), name, usage)
+	sysflag.Var(newUint64Value(value, p), name, usage)
 }
 
 // Uint64Full函数用于将一个uint64类型的变量注册到命令行参数中，并设置参数的名称、标题、键和值
@@ -417,20 +421,20 @@ func Uint64(name string, value uint64, usage string) *uint64 {
 }
 
 // Args函数用于获取命令行参数
-func Args() []string { return sysflag.f.args }
+func Args() []string { return sysflag.args }
 
 // ArgsLen函数用于获取命令行参数的长度
-func ArgsLen() int { return len(sysflag.f.args) }
+func ArgsLen() int { return len(sysflag.args) }
 
 // Usage函数用于打印命令行参数的使用方法
 func Usage() {
 	// 打印命令行参数的使用方法
 	Greenf(fmt.Sprintf("%s的使用方法", os.Args[0]), "\n\n")
-	sysflag.f.PrintDefaults()
+	sysflag.PrintDefaults()
 }
 
 // PrintAll函数用于打印所有的命令行参数
-func PrintAll() { sysflag.f.PrintAll() }
+func PrintAll() { sysflag.PrintAll() }
 
 // SetOutput函数用于设置命令行参数的输出
-func SetOutput(output io.Writer) { sysflag.f.SetOutput(output) }
+func SetOutput(output io.Writer) { sysflag.SetOutput(output) }

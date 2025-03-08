@@ -29,6 +29,11 @@ func NewFlagSet(name string, errorHandling ErrorHandling) *FlagSet {
 	return f
 }
 
+// 设置解析错误时的处理方式
+func (f *FlagSet) SetErrorHandling(h ErrorHandling) {
+	f.errorHandling = h
+}
+
 // 打印默认参数变量
 // PrintDefaults将所有的默认值打印到标准错误
 func (f *FlagSet) PrintDefaults() {
@@ -144,6 +149,9 @@ func (f *FlagSet) Arg(i int) string {
 	}
 	return f.args[i]
 }
+
+// ArgsLen函数用于获取参数的长度
+func (f *FlagSet) ArgsLen() int { return len(f.args) }
 
 // 打印帮助信息
 func (f *FlagSet) usage() {
