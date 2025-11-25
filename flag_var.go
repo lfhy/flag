@@ -1,6 +1,198 @@
 package flag
 
-import "time"
+import (
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+)
+
+// FlagVar 定义一个支持多来源设置的标志变量
+type FlagVar struct {
+	// Value 存储实际值的指针，确保可以通过反射修改其内容
+	Value interface{}
+	// Name 是用于命令行参数解析的名字，例如 "--port"
+	Name string
+	// Env 是对应的环境变量名，例如 "APP_PORT"
+	Env string
+	// ConfigSection 表示在配置文件中的节标题，例如 "[server]"
+	ConfigSection string
+	// ConfigKey 表示在配置文件中的键名，例如 "port"
+	ConfigKey string
+	// Usage 提供帮助文档描述此参数的作用
+	Usage string
+	// Hidden 控制该参数是否出现在 --help 输出中
+	Hidden bool
+	// DefaultValue 设置默认值，当所有来源都没有指定时使用
+	DefaultValue interface{}
+}
+
+func anyToBool(value any) bool {
+	switch data := value.(type) {
+	case bool:
+		return data
+	case int:
+		return data != 0
+	case int64:
+		return data != 0
+	case uint:
+		return data != 0
+	case uint64:
+		return data != 0
+	case string:
+		return strings.ToLower(data) == "true"
+	}
+	return false
+}
+
+func anyToString(value any) string {
+	switch data := value.(type) {
+	case string:
+		return data
+	case int:
+		return fmt.Sprintf("%d", data)
+	case int64:
+		return fmt.Sprintf("%d", data)
+	case uint:
+		return fmt.Sprintf("%d", data)
+	case uint64:
+		return fmt.Sprintf("%d", data)
+	case bool:
+		return fmt.Sprintf("%t", data)
+	}
+	return ""
+}
+
+func anyToInt(value any) int {
+	switch data := value.(type) {
+	case int:
+		return data
+	case int64:
+		return int(data)
+	case uint:
+		return int(data)
+	case uint64:
+		return int(data)
+	case string:
+		i, _ := strconv.Atoi(data)
+		return i
+	}
+	return 0
+}
+
+func anyToInt64(value any) int64 {
+	switch data := value.(type) {
+	case int:
+		return int64(data)
+	case int64:
+		return data
+	case uint:
+		return int64(data)
+	case uint64:
+		return int64(data)
+	case string:
+		i, _ := strconv.ParseInt(data, 10, 64)
+		return i
+	}
+	return 0
+}
+
+func anyToUint(value any) uint {
+	switch data := value.(type) {
+	case int:
+		return uint(data)
+	case int64:
+		return uint(data)
+	case uint:
+		return data
+	case uint64:
+		return uint(data)
+	case string:
+		i, _ := strconv.ParseUint(data, 10, 64)
+		return uint(i)
+	}
+	return 0
+}
+
+func anyToUint64(value any) uint64 {
+	switch data := value.(type) {
+	case int:
+		return uint64(data)
+	case int64:
+		return uint64(data)
+	case uint:
+		return uint64(data)
+	case uint64:
+		return data
+	case string:
+		i, _ := strconv.ParseUint(data, 10, 64)
+		return i
+	}
+	return 0
+}
+
+func anyToFloat64(value any) float64 {
+	switch data := value.(type) {
+	case float64:
+		return data
+	case int:
+		return float64(data)
+	case string:
+		f, _ := strconv.ParseFloat(data, 64)
+		return f
+	}
+	return 0
+}
+
+func anyToTimeDuration(value any) time.Duration {
+	switch data := value.(type) {
+	case time.Duration:
+		return data
+	case string:
+		d, _ := time.ParseDuration(data)
+		return d
+	}
+	return 0
+}
+
+func (f *FlagSet) Var(opt *FlagVar) {
+	var value Value
+	switch data := opt.Value.(type) {
+	case bool:
+		value = newBoolValue(anyToBool(opt.DefaultValue), &data)
+	case *bool:
+		value = newBoolValue(anyToBool(opt.DefaultValue), data)
+	case string:
+		value = newStringValue(anyToString(opt.DefaultValue), &data)
+	case *string:
+		value = newStringValue(anyToString(opt.DefaultValue), data)
+	case int:
+		value = newIntValue(anyToInt(opt.DefaultValue), &data)
+	case *int:
+		value = newIntValue(anyToInt(opt.DefaultValue), data)
+	case int64:
+		value = newInt64Value(anyToInt64(opt.DefaultValue), &data)
+	case *int64:
+		value = newInt64Value(anyToInt64(opt.DefaultValue), data)
+	case uint:
+		value = newUintValue(anyToUint(opt.DefaultValue), &data)
+	case *uint:
+		value = newUintValue(anyToUint(opt.DefaultValue), data)
+	case uint64:
+		value = newUint64Value(anyToUint64(opt.DefaultValue), &data)
+	case *uint64:
+		value = newUint64Value(anyToUint64(opt.DefaultValue), data)
+	case float64:
+		value = newFloat64Value(anyToFloat64(opt.DefaultValue), &data)
+	case *float64:
+		value = newFloat64Value(anyToFloat64(opt.DefaultValue), data)
+	case time.Duration:
+		value = newDurationValue(anyToTimeDuration(opt.DefaultValue), &data)
+	case *time.Duration:
+		value = newDurationValue(anyToTimeDuration(opt.DefaultValue), data)
+	}
+	f.VarFlag(value, opt.Name, opt.ConfigSection, opt.ConfigKey, opt.Env, opt.Hidden, opt.Usage)
+}
 
 // Bool类型定义
 // 定义一个Bool类型的Flag，并设置其全名、标题、键、环境变量、默认值和用法
@@ -20,7 +212,7 @@ func (f *FlagSet) BoolEnvVar(p *bool, name string, env string, value bool, usage
 
 // 定义一个Bool类型的Flag，并设置其全名和默认值，不设置标题、键和环境变量
 func (f *FlagSet) BoolVar(p *bool, name string, value bool, usage string) {
-	f.Var(newBoolValue(value, p), name, usage)
+	f.FullVar(newBoolValue(value, p), name, "", "", "", usage)
 }
 
 // 定义一个Bool类型的Flag，并设置其全名、标题、键、环境变量、默认值和用法，返回一个指向该Flag的指针
@@ -69,7 +261,7 @@ func (f *FlagSet) StringEnvVar(p *string, name string, env string, value string,
 
 // 定义一个String类型的Flag，并设置其全名和默认值，不设置标题、键和环境变量
 func (f *FlagSet) StringVar(p *string, name string, value string, usage string) {
-	f.Var(newStringValue(value, p), name, usage)
+	f.FullVar(newStringValue(value, p), name, "", "", "", usage)
 }
 
 // 定义一个String类型的Flag，并设置其全名、标题、键、环境变量、默认值和用法，返回一个指向该Flag的指针
@@ -118,7 +310,7 @@ func (f *FlagSet) Float64EnvVar(p *float64, name string, env string, value float
 
 // 定义一个Float64类型的Flag，并设置其全名和默认值，不设置标题、键和环境变量
 func (f *FlagSet) Float64Var(p *float64, name string, value float64, usage string) {
-	f.Var(newFloat64Value(value, p), name, usage)
+	f.FullVar(newFloat64Value(value, p), name, "", "", "", usage)
 }
 
 // 定义一个Float64类型的Flag，并设置其全名、标题、键、环境变量、默认值和用法，返回一个指向该Flag的指针
@@ -167,7 +359,7 @@ func (f *FlagSet) DurationEnvVar(p *time.Duration, name string, env string, valu
 
 // 定义一个Duration类型的Flag，并设置其全名和默认值，不设置标题、键和环境变量
 func (f *FlagSet) DurationVar(p *time.Duration, name string, value time.Duration, usage string) {
-	f.Var(newDurationValue(value, p), name, usage)
+	f.FullVar(newDurationValue(value, p), name, "", "", "", usage)
 }
 
 // 定义一个Duration类型的Flag，并设置其全名、标题、键、环境变量、默认值和用法，返回一个指向该Flag的指针
@@ -216,7 +408,7 @@ func (f *FlagSet) IntEnvVar(p *int, name string, env string, value int, usage st
 
 // 定义一个Int类型的Flag，并设置其全名和默认值，不设置标题、键和环境变量
 func (f *FlagSet) IntVar(p *int, name string, value int, usage string) {
-	f.Var(newIntValue(value, p), name, usage)
+	f.FullVar(newIntValue(value, p), name, "", "", "", usage)
 }
 
 // 定义一个Int类型的Flag，并设置其全名、标题、键、环境变量、默认值和用法，返回一个指向该Flag的指针
@@ -265,7 +457,7 @@ func (f *FlagSet) Int64EnvVar(p *int64, name string, env string, value int64, us
 
 // 定义一个Int64类型的Flag，并设置其全名和默认值，不设置标题、键和环境变量
 func (f *FlagSet) Int64Var(p *int64, name string, value int64, usage string) {
-	f.Var(newInt64Value(value, p), name, usage)
+	f.FullVar(newInt64Value(value, p), name, "", "", "", usage)
 }
 
 // 定义一个Int64类型的Flag，并设置其全名、标题、键、环境变量、默认值和用法，返回一个指向该Flag的指针
@@ -314,7 +506,7 @@ func (f *FlagSet) UintEnvVar(p *uint, name string, env string, value uint, usage
 
 // 定义一个Uint类型的Flag，并设置其全名和默认值，不设置标题、键和环境变量
 func (f *FlagSet) UintVar(p *uint, name string, value uint, usage string) {
-	f.Var(newUintValue(value, p), name, usage)
+	f.FullVar(newUintValue(value, p), name, "", "", "", usage)
 }
 
 // 定义一个Uint类型的Flag，并设置其全名、标题、键、环境变量、默认值和用法，返回一个指向该Flag的指针
@@ -362,7 +554,7 @@ func (f *FlagSet) Uint64EnvVar(p *uint64, name string, env string, value uint64,
 // Uint64Var 函数用于将一个 uint64 类型的变量与一个命令行参数进行绑定
 func (f *FlagSet) Uint64Var(p *uint64, name string, value uint64, usage string) {
 	// 调用 Var 函数，将 uint64 类型的变量与命令行参数进行绑定
-	f.Var(newUint64Value(value, p), name, usage)
+	f.FullVar(newUint64Value(value, p), name, "", "", "", usage)
 }
 
 // Uint64Full 函数用于将一个 uint64 类型的变量与一个配置文件、环境变量和命令行参数进行绑定

@@ -8,8 +8,8 @@ import (
 )
 
 type Config struct {
-	config *viper.Viper
-	path   string
+	*viper.Viper
+	path string
 }
 
 // 新的配置文件
@@ -19,16 +19,16 @@ func newConfig(path string) Config {
 	}
 	var c Config
 	c.path = path
-	c.config = viper.New()
-	c.config.AddConfigPath(path)
-	c.config.SetConfigFile(path)
+	c.Viper = viper.New()
+	c.Viper.AddConfigPath(path)
+	c.Viper.SetConfigFile(path)
 	config := strings.Split(path, ".")
 	if len(config) >= 2 {
-		c.config.SetConfigType(config[len(config)-1])
+		c.Viper.SetConfigType(config[len(config)-1])
 	} else {
-		c.config.SetConfigType("ini")
+		c.Viper.SetConfigType("toml")
 	}
-	c.config.ReadInConfig()
+	c.Viper.ReadInConfig()
 	return c
 }
 
@@ -45,8 +45,8 @@ func (c *Config) WriteToConfig(title, key string, value any) {
 			readKey = title
 		}
 	}
-	c.config.Set(readKey, value)
-	c.config.WriteConfig()
+	c.Viper.Set(readKey, value)
+	c.Viper.WriteConfig()
 }
 
 // 读取配置信息为任意类型
@@ -62,7 +62,7 @@ func (c *Config) ReadConfigToAny(title, key string) any {
 			readKey = title
 		}
 	}
-	return c.config.Get(readKey)
+	return c.Viper.Get(readKey)
 }
 
 // 读取配置信息为string类型
@@ -79,10 +79,6 @@ func (c *Config) ReadConfigToString(title, key string) string {
 		}
 	}
 	return c.GetString(readKey)
-}
-
-func (c *Config) GetString(key string) string {
-	return c.config.GetString(key)
 }
 
 // 写入配置文件
@@ -103,7 +99,7 @@ func (c *Config) ReadConfigToStringMap(title, key string) map[string]string {
 			readKey = title
 		}
 	}
-	return c.config.GetStringMapString(readKey)
+	return c.Viper.GetStringMapString(readKey)
 }
 
 func (c *Config) ReadConfigToKVMap(title, key string) map[string]any {
@@ -118,7 +114,7 @@ func (c *Config) ReadConfigToKVMap(title, key string) map[string]any {
 			readKey = title
 		}
 	}
-	return c.config.GetStringMap(readKey)
+	return c.Viper.GetStringMap(readKey)
 }
 
 // 写入配置文件
@@ -143,11 +139,11 @@ func (c *Config) ReadConfigToAnySlice(title, key string) []any {
 			readKey = title
 		}
 	}
-	data, ok := c.config.Get(readKey).([]any)
+	data, ok := c.Viper.Get(readKey).([]any)
 	if ok {
 		return data
 	} else {
-		return []any{c.config.Get(readKey)}
+		return []any{c.Viper.Get(readKey)}
 	}
 }
 
@@ -163,15 +159,15 @@ func (c *Config) DeleteConfigValue(title, key string) {
 
 // 获取配置文件名称
 func (c *Config) GetConfigPath() string {
-	return c.config.ConfigFileUsed()
+	return c.Viper.ConfigFileUsed()
 }
 
 // 获取配置文件所有Key
 func (c *Config) GetAllConfigKeys() []string {
-	return c.config.AllKeys()
+	return c.Viper.AllKeys()
 }
 
 // 获取配置文件所有Key和Value
 func (c *Config) GetAllConfigValues() map[string]any {
-	return c.config.AllSettings()
+	return c.Viper.AllSettings()
 }

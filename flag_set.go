@@ -19,6 +19,16 @@ type FlagSet struct {
 	args          []string // 参数
 	errorHandling ErrorHandling
 	output        io.Writer //如果没有设置则输出至Stdout
+	config        *Config
+}
+
+func (f *FlagSet) GetConfig() *Config {
+	// 避免无初始化
+	if f.config == nil {
+		config := newConfig("config.toml")
+		f.config = &config
+	}
+	return f.config
 }
 
 func NewFlagSet(name string, errorHandling ErrorHandling) *FlagSet {
@@ -39,7 +49,7 @@ func (f *FlagSet) SetErrorHandling(h ErrorHandling) {
 func (f *FlagSet) PrintDefaults() {
 	//遍历全部的参数变量
 	f.VisitAll(func(flag *Flag) {
-		if flag.Hiden {
+		if flag.Hidden {
 			return
 		}
 		//-之前有两个空格进行区分参数
@@ -177,7 +187,7 @@ var DefaultConfigFlagName = "c"
 func (f *FlagSet) Parse(arguments []string) error {
 	// 如果没有定义默认的配置文件标志名，则添加一个隐藏的标志名
 	if _, ok := f.formal[DefaultConfigFlagName]; !ok {
-		f.StringHiden(DefaultConfigFlagName, "", "默认读取的配置文件 如果参数没有值则会读取配置文件中的值")
+		f.StringHidden(DefaultConfigFlagName, "", "默认读取的配置文件 如果参数没有值则会读取配置文件中的值")
 	}
 
 	// 标记已经解析过
@@ -250,6 +260,7 @@ func (f *FlagSet) Parse(arguments []string) error {
 // 参数2:覆盖传参
 func (f *FlagSet) ParseFile(config string, rewritevalue bool) error {
 	fconfig := newConfig(config)
+	f.config = &fconfig
 	for name, flag := range f.formal {
 		//忽略已设置的参数；参数优先于文件
 		if f.actual[name] != nil && !rewritevalue {
@@ -382,7 +393,7 @@ func (f *FlagSet) FullVar(value Value, name string, title, key string, env strin
 	f.VarFlag(value, name, title, key, env, false, usage)
 }
 
-func (f *FlagSet) FullHidenVar(value Value, name string, title, key string, env string, usage string) {
+func (f *FlagSet) FullHiddenVar(value Value, name string, title, key string, env string, usage string) {
 	f.VarFlag(value, name, title, key, env, true, usage)
 }
 
@@ -394,8 +405,8 @@ func (f *FlagSet) FullHidenVar(value Value, name string, title, key string, env 
 // 参数5:环境变量名称
 // 参数6:是否隐藏
 // 参数7:使用方法
-func (f *FlagSet) VarFlag(value Value, name string, title, key string, env string, hiden bool, usage string) {
-	flag := &Flag{Name: name, Usage: usage, Value: value, DefValue: value.String(), ConfigTitle: title, ConfigKey: key, EnvName: env, Hiden: hiden}
+func (f *FlagSet) VarFlag(value Value, name string, title, key string, env string, hidden bool, usage string) {
+	flag := &Flag{Name: name, Usage: usage, Value: value, DefValue: value.String(), ConfigTitle: title, ConfigKey: key, EnvName: env, Hidden: hidden}
 	_, alreadythere := f.formal[name]
 	if alreadythere {
 		var msg string
@@ -413,20 +424,12 @@ func (f *FlagSet) VarFlag(value Value, name string, title, key string, env strin
 	f.formal[name] = flag
 }
 
-// 定义类型
-// 参数1:值
-// 参数2:解析的参数flag
-// 参数3:使用方法
-func (f *FlagSet) Var(value Value, name string, usage string) {
-	f.FullVar(value, name, "", "", "", usage)
-}
-
 // 定义隐藏类型类型
 // 参数1:值
 // 参数2:解析的参数flag
 // 参数3:使用方法
-func (f *FlagSet) HidenVar(value Value, name string, usage string) {
-	f.FullHidenVar(value, name, "", "", "", usage)
+func (f *FlagSet) HiddenVar(value Value, name string, usage string) {
+	f.FullHiddenVar(value, name, "", "", "", usage)
 }
 
 // 查找是否配置文件没有被解析
@@ -471,7 +474,7 @@ func (f *FlagSet) PrintAll() {
 			if len(strings.Split(value, ",")) > 1 {
 				value = strings.Join(strings.Split(value, ","), "\n")
 			}
-			tabs.Add(f2.Name, value, configName, f2.EnvName, fmt.Sprint(f2.Hiden), f2.DefValue)
+			tabs.Add(f2.Name, value, configName, f2.EnvName, fmt.Sprint(f2.Hidden), f2.DefValue)
 		}
 	}
 	tabs.Print()

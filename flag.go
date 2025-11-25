@@ -32,7 +32,7 @@ type Flag struct {
 	Usage       string // 帮助信息
 	Value       Value  // 参数值
 	DefValue    string // 默认值
-	Hiden       bool   //是否隐藏参数
+	Hidden      bool   //是否隐藏参数
 }
 
 // 默认使用方法
