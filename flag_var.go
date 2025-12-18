@@ -156,6 +156,22 @@ func anyToTimeDuration(value any) time.Duration {
 }
 
 func (f *FlagSet) Var(opt *FlagVar) {
+	if opt.Name == "" && opt.ConfigSection != "" && opt.ConfigKey != "" {
+		opt.Name = opt.ConfigSection + "-" + opt.ConfigKey
+	}
+	if opt.ConfigKey == "" && opt.ConfigSection == "" {
+		info := strings.Split(opt.Name, "-")
+		if len(info) >= 2 {
+			opt.ConfigSection = info[0]
+			opt.ConfigKey = strings.Join(info[0:], "-")
+		} else {
+			opt.ConfigSection = "config"
+			opt.ConfigKey = opt.Name
+		}
+	}
+	if opt.ConfigKey == "" && opt.ConfigSection != "" {
+		opt.ConfigKey = opt.Name
+	}
 	var value Value
 	switch data := opt.Value.(type) {
 	case bool:
