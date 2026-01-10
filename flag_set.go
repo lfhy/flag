@@ -100,13 +100,11 @@ func (f *FlagSet) PrintDefaults() {
 
 			var description string
 			// 获取帮助信息
-			switch cmd := cmd.(type) {
-			case CmdUsage:
-				description = cmd.Usage()
-			case CmdUsage2:
-				description = cmd.usage()
+			switch c := cmd.(type) {
 			case CmdHelp:
-				description = cmd.Help()
+				description = safeGetHelp(cmd.Name(), c.Help)
+			case CmdUsage:
+				description = safeGetHelp(cmd.Name(), c.Usage)
 			default:
 				description = "运行 " + cmd.Name()
 			}
@@ -116,7 +114,16 @@ func (f *FlagSet) PrintDefaults() {
 		cmdTable.Print()
 		fmt.Fprint(f.out(), "\n") // 添加额外换行以保持一致性
 	}
+}
 
+func safeGetHelp(name string, fn func() string) (res string) {
+	defer func() {
+		if recover() != nil {
+			res = "运行 " + name
+		}
+	}()
+	res = fn()
+	return
 }
 
 // 设置参数

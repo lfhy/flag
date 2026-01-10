@@ -18,15 +18,6 @@ type CmdHide interface {
 	Hide() bool
 }
 
-type CmdPrintDefaults interface {
-	PrintDefaults()
-}
-
-// 内部使用
-type CmdUsage2 interface {
-	usage() string
-}
-
 type CmdHelp interface {
 	Help() string
 }
@@ -75,14 +66,10 @@ func (f *FlagSet) RunCmd(cmd string, args ...string) error {
 		if c.Name() == cmd {
 			if isHelp {
 				switch c := c.(type) {
-				case CmdUsage:
-					fmt.Println(c.Usage())
-				case CmdPrintDefaults:
-					c.PrintDefaults()
-				case CmdUsage2:
-					fmt.Println(c.usage())
 				case CmdHelp:
-					fmt.Println(c.Help())
+					fmt.Println(safeGetHelp(cmd, c.Help))
+				case CmdUsage:
+					fmt.Println(safeGetHelp(cmd, c.Usage))
 				default:
 					fmt.Println("运行", c.Name())
 				}
@@ -91,12 +78,10 @@ func (f *FlagSet) RunCmd(cmd string, args ...string) error {
 			err := c.Init(args...)
 			if err != nil {
 				switch c := c.(type) {
-				case CmdUsage:
-					fmt.Println(c.Usage())
-				case CmdUsage2:
-					fmt.Println(c.usage())
 				case CmdHelp:
-					fmt.Println(c.Help())
+					fmt.Println(safeGetHelp(cmd, c.Help))
+				case CmdUsage:
+					fmt.Println(safeGetHelp(cmd, c.Usage))
 				}
 				return err
 			}
