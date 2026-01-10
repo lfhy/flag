@@ -74,14 +74,14 @@ func (f *FlagSet) RunCmd(cmd string, args ...string) error {
 		if c.Name() == cmd {
 			if isHelp {
 				switch c := c.(type) {
-				case CmdHelp:
-					fmt.Println(safeGetHelp(cmd, c.Help))
-				case CmdUsage:
-					fmt.Println(safeGetHelp(cmd, c.Usage))
 				case CmdHelpFn:
 					c.Help()
 				case CmdUsageFn:
 					c.Usage()
+				case CmdHelp:
+					fmt.Println(safeGetHelp(cmd, c.Help))
+				case CmdUsage:
+					fmt.Println(safeGetHelp(cmd, c.Usage))
 				default:
 					fmt.Println("运行", c.Name())
 				}
