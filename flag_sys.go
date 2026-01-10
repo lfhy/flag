@@ -10,6 +10,10 @@ import (
 // 定义系统标志
 var sysflag = ArgsFlag{NewFlagSet(os.Args[0], ExitOnError)}
 
+func GetDefaultFlagSet() *FlagSet {
+	return sysflag.FlagSet
+}
+
 func SetErrorHandling(h ErrorHandling) {
 	sysflag.SetErrorHandling(h)
 }

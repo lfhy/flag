@@ -28,3 +28,19 @@ func (f *ArgsFlag) Usage() {
 	// 打印默认值
 	f.PrintDefaults()
 }
+
+func RegisterCommand(cmd Cmd) {
+	GetDefaultFlagSet().RegisterCommand(cmd)
+}
+
+func Run() error {
+	return GetDefaultFlagSet().Run(os.Args[1:]...)
+}
+
+func LookupCmd(cmd string) bool {
+	return GetDefaultFlagSet().LookupCmd(cmd)
+}
+
+func RunCmd(cmd string, args ...string) error {
+	return GetDefaultFlagSet().RunCmd(cmd, args...)
+}

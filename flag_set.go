@@ -20,6 +20,7 @@ type FlagSet struct {
 	errorHandling ErrorHandling
 	output        io.Writer //如果没有设置则输出至Stdout
 	config        *Config
+	cmds          []Cmd
 }
 
 func (f *FlagSet) GetConfig() *Config {
@@ -87,6 +88,35 @@ func (f *FlagSet) PrintDefaults() {
 		//末尾添加换行 换两行
 		fmt.Fprint(f.out(), s, "\n\n")
 	})
+	// cmd
+	if len(f.cmds) > 0 {
+		fmt.Fprint(f.out(), "可用命令:\n")
+		cmdTable := newCmdTable("命令", "说明")
+		for _, cmd := range f.cmds {
+			cmdHide, ok := cmd.(CmdHide)
+			if ok && cmdHide.Hide() {
+				continue
+			}
+
+			var description string
+			// 获取帮助信息
+			switch cmd := cmd.(type) {
+			case CmdUsage:
+				description = cmd.Usage()
+			case CmdUsage2:
+				description = cmd.usage()
+			case CmdHelp:
+				description = cmd.Help()
+			default:
+				description = "运行 " + cmd.Name()
+			}
+
+			cmdTable.Add(cmd.Name(), description)
+		}
+		cmdTable.Print()
+		fmt.Fprint(f.out(), "\n") // 添加额外换行以保持一致性
+	}
+
 }
 
 // 设置参数
