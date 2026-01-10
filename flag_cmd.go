@@ -22,6 +22,14 @@ type CmdHelp interface {
 	Help() string
 }
 
+type CmdHelpFn interface {
+	Help()
+}
+
+type CmdUsageFn interface {
+	Usage()
+}
+
 func (f *FlagSet) RegisterCommand(cmd Cmd) {
 	f.cmds = append(f.cmds, cmd)
 }
@@ -70,6 +78,10 @@ func (f *FlagSet) RunCmd(cmd string, args ...string) error {
 					fmt.Println(safeGetHelp(cmd, c.Help))
 				case CmdUsage:
 					fmt.Println(safeGetHelp(cmd, c.Usage))
+				case CmdHelpFn:
+					c.Help()
+				case CmdUsageFn:
+					c.Usage()
 				default:
 					fmt.Println("运行", c.Name())
 				}
