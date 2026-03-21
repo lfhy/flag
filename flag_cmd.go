@@ -37,6 +37,10 @@ type CmdUsageFn interface {
 	Usage()
 }
 
+type CmdPrintDefaults interface {
+	PrintDefaults()
+}
+
 func (f *FlagSet) RegisterCommand(cmd Cmd) {
 	f.cmds = append(f.cmds, cmd)
 }
@@ -102,6 +106,11 @@ func (f *FlagSet) RunCmd(cmd string, args ...string) error {
 						fmt.Println(safeGetHelp(cmd, c.Help))
 					case CmdUsage:
 						fmt.Println(safeGetHelp(cmd, c.Usage))
+					}
+					pfn, ok := c.(CmdPrintDefaults)
+					if ok {
+						fmt.Println()
+						pfn.PrintDefaults()
 					}
 					return err
 				}
