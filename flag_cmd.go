@@ -6,8 +6,15 @@ import (
 
 type Cmd interface {
 	Name() string
-	Init(args ...string) error
 	Run(args ...string) error
+}
+
+type CmdInitWithError interface {
+	Init(args ...string) error
+}
+
+type CmdInit interface {
+	Init(args ...string)
 }
 
 type CmdUsage interface {
@@ -87,15 +94,19 @@ func (f *FlagSet) RunCmd(cmd string, args ...string) error {
 				}
 				return nil
 			}
-			err := c.Init(args...)
-			if err != nil {
-				switch c := c.(type) {
-				case CmdHelp:
-					fmt.Println(safeGetHelp(cmd, c.Help))
-				case CmdUsage:
-					fmt.Println(safeGetHelp(cmd, c.Usage))
+			if cmdInit, ok := c.(CmdInitWithError); ok {
+				err := cmdInit.Init(args...)
+				if err != nil {
+					switch c := c.(type) {
+					case CmdHelp:
+						fmt.Println(safeGetHelp(cmd, c.Help))
+					case CmdUsage:
+						fmt.Println(safeGetHelp(cmd, c.Usage))
+					}
+					return err
 				}
-				return err
+			} else if cmdInit, ok := c.(CmdInit); ok {
+				cmdInit.Init(args...)
 			}
 			return c.Run(args...)
 		}
