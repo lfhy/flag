@@ -101,6 +101,10 @@ func (f *FlagSet) RunCmd(cmd string, args ...string) error {
 			if cmdInit, ok := c.(CmdInitWithError); ok {
 				err := cmdInit.Init(args...)
 				if err != nil {
+					// 子命令在解析 -h/--help 时已经输出过帮助信息了。
+					if err == ErrHelp {
+						return nil
+					}
 					switch c := c.(type) {
 					case CmdHelp:
 						fmt.Println(safeGetHelp(cmd, c.Help))

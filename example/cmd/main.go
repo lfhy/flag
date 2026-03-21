@@ -6,23 +6,37 @@ import (
 	"github.com/lfhy/flag"
 )
 
-type Cmd1 struct {
+var Global string
+
+func init() {
+	flag.StringVar(&Global, "g", "", "全局参数")
 }
 
-func (Cmd1) Name() string {
+type Cmd1 struct {
+	*flag.FlagSet
+	Cmd1Params string
+}
+
+func (*Cmd1) Name() string {
 	return "cmd1"
 }
 
-func (Cmd1) Init(args ...string) error {
-	return nil
+func (s *Cmd1) Init(args ...string) error {
+	s.FlagSet = flag.NewFlagSet("cmd1", flag.ContinueOnError)
+	s.Var(&flag.FlagVar{
+		Value: &s.Cmd1Params,
+		Name:  "p",
+		Usage: "cmd1的参数",
+	})
+	return s.Parse(args)
 }
 
-func (Cmd1) Run(args ...string) error {
+func (*Cmd1) Run(args ...string) error {
 	fmt.Println("运行CMD1")
 	return nil
 }
 
-func (Cmd1) Help() string {
+func (*Cmd1) Help() string {
 	return "运行CMD1"
 }
 
@@ -43,8 +57,9 @@ func (Cmd2) Run(args ...string) error {
 }
 
 func main() {
-	flag.RegisterCommand(Cmd1{})
+	flag.RegisterCommand(&Cmd1{})
 	flag.RegisterCommand(Cmd2{})
+	flag.Parse()
 	err := flag.Run()
 	if err != nil {
 		fmt.Println(err)
