@@ -91,7 +91,6 @@ func (f *FlagSet) PrintDefaults() {
 	// cmd
 	if len(f.cmds) > 0 {
 		fmt.Fprint(f.out(), "可用命令:\n")
-		cmdTable := newCmdTable("命令", "说明")
 		for _, cmd := range f.cmds {
 			cmdHide, ok := cmd.(CmdHide)
 			if ok && cmdHide.Hide() {
@@ -109,10 +108,9 @@ func (f *FlagSet) PrintDefaults() {
 				description = "运行 " + cmd.Name()
 			}
 
-			cmdTable.Add(cmd.Name(), description)
+			fmt.Fprintf(f.out(), "  %-10s %s\n", cmd.Name(), description)
 		}
-		cmdTable.Print()
-		fmt.Fprint(f.out(), "\n") // 添加额外换行以保持一致性
+		fmt.Fprint(f.out(), "\n")
 	}
 }
 
