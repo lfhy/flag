@@ -175,13 +175,13 @@ func (f *FlagSet) Var(opt *FlagVar) {
 	}
 	value, err := newReflectValue(opt.Value, opt.DefaultValue)
 	if err != nil {
-		f.handleVarError(err)
+		f.handleError(err)
 		return
 	}
 	f.VarFlag(value, opt.Name, opt.ConfigSection, opt.ConfigKey, opt.Env, opt.Hidden, opt.Usage)
 }
 
-func (f *FlagSet) handleVarError(err error) {
+func (f *FlagSet) handleError(err error) {
 	switch f.errorHandling {
 	case ContinueOnError:
 		fmt.Fprintln(f.out(), err)

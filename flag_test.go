@@ -248,6 +248,36 @@ func TestCommandAliasRunsSameCommand(t *testing.T) {
 	}
 }
 
+func TestFlagAliasContinueOnErrorDoesNotPanic(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.ContinueOnError)
+
+	output := captureStdout(t, func() {
+		f.Alias("missing", "m")
+	})
+
+	if !strings.Contains(output, "参数不存在，无法设置别名: missing") {
+		t.Fatalf("应输出参数别名错误，实际输出: %q", output)
+	}
+	if got := f.Lookup("m"); got != nil {
+		t.Fatalf("ContinueOnError 不应注册无效别名")
+	}
+}
+
+func TestCommandAliasContinueOnErrorDoesNotPanic(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.ContinueOnError)
+
+	output := captureStdout(t, func() {
+		f.AliasCmd("missing", "m")
+	})
+
+	if !strings.Contains(output, "命令不存在，无法设置别名: missing") {
+		t.Fatalf("应输出命令别名错误，实际输出: %q", output)
+	}
+	if f.LookupCmd("m") {
+		t.Fatalf("ContinueOnError 不应注册无效命令别名")
+	}
+}
+
 func TestPrintDefaultsShowsAliases(t *testing.T) {
 	f := flag.NewFlagSet("test", flag.ContinueOnError)
 	f.String("user", "", "用户名")

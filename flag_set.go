@@ -508,23 +508,20 @@ func (f *FlagSet) VarFlag(value Value, name string, title, key string, env strin
 
 func (f *FlagSet) Alias(name, alias string) {
 	if name == "" || alias == "" {
-		msg := "参数别名不能为空"
-		fmt.Fprintln(f.out(), msg)
-		panic(msg)
+		f.handleError(fmt.Errorf("参数别名不能为空"))
+		return
 	}
 	if name == alias {
 		return
 	}
 	flag := f.Lookup(name)
 	if flag == nil || flag.Name != name {
-		msg := fmt.Sprintf("参数不存在，无法设置别名: %s", name)
-		fmt.Fprintln(f.out(), msg)
-		panic(msg)
+		f.handleError(fmt.Errorf("参数不存在，无法设置别名: %s", name))
+		return
 	}
 	if f.Lookup(alias) != nil {
-		msg := fmt.Sprintf("参数别名重复定义: %s", alias)
-		fmt.Fprintln(f.out(), msg)
-		panic(msg)
+		f.handleError(fmt.Errorf("参数别名重复定义: %s", alias))
+		return
 	}
 	if f.flagAliases == nil {
 		f.flagAliases = make(map[string]string)

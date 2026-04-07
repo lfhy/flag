@@ -138,22 +138,19 @@ func (f *FlagSet) RunCmd(cmd string, args ...string) error {
 
 func (f *FlagSet) AliasCmd(name, alias string) {
 	if name == "" || alias == "" {
-		msg := "命令别名不能为空"
-		fmt.Fprintln(f.out(), msg)
-		panic(msg)
+		f.handleError(fmt.Errorf("命令别名不能为空"))
+		return
 	}
 	if name == alias {
 		return
 	}
 	if _, _, ok := f.lookupCommand(name); !ok {
-		msg := fmt.Sprintf("命令不存在，无法设置别名: %s", name)
-		fmt.Fprintln(f.out(), msg)
-		panic(msg)
+		f.handleError(fmt.Errorf("命令不存在，无法设置别名: %s", name))
+		return
 	}
 	if _, _, ok := f.lookupCommand(alias); ok {
-		msg := fmt.Sprintf("命令别名重复定义: %s", alias)
-		fmt.Fprintln(f.out(), msg)
-		panic(msg)
+		f.handleError(fmt.Errorf("命令别名重复定义: %s", alias))
+		return
 	}
 	if f.cmdAliases == nil {
 		f.cmdAliases = make(map[string]string)
