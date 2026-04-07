@@ -16,6 +16,8 @@ type FlagSet struct {
 	parsed        bool   // 是否解析
 	actual        map[string]*Flag
 	formal        map[string]*Flag
+	flagAliases   map[string]string
+	cmdAliases    map[string]string
 	args          []string // 参数
 	errorHandling ErrorHandling
 	output        io.Writer //如果没有设置则输出至Stdout
@@ -48,13 +50,25 @@ func (f *FlagSet) SetErrorHandling(h ErrorHandling) {
 // 打印默认参数变量
 // PrintDefaults将所有的默认值打印到标准错误
 func (f *FlagSet) PrintDefaults() {
+	flagLabelWidth := 0
+	flagLabels := make(map[string]string, len(f.formal))
+	f.VisitAll(func(flag *Flag) {
+		if flag.Hidden {
+			return
+		}
+		label := flagDisplayName(flag)
+		flagLabels[flag.Name] = label
+		if len(label) > flagLabelWidth {
+			flagLabelWidth = len(label)
+		}
+	})
+
 	//遍历全部的参数变量
 	f.VisitAll(func(flag *Flag) {
 		if flag.Hidden {
 			return
 		}
-		//-之前有两个空格进行区分参数
-		s := fmt.Sprintf("  -%s", flag.Name) //打印参数名称
+		s := fmt.Sprintf("  %-*s", flagLabelWidth, flagLabels[flag.Name])
 		//获取参数名称和用法
 		name, usage := UnquoteUsage(flag)
 		//如果名称大于0则添加
@@ -63,18 +77,7 @@ func (f *FlagSet) PrintDefaults() {
 		} else {
 			s += " 参数值类型:bool"
 		}
-
-		//添加换行符
-		// 一个ASCII字母的布尔标志非常常见，我们特别对待它们，将它们的用法放在同一行。
-		if len(s) <= 4 { // space, space, '-', 'x'.
-			s += "\t"
-		} else {
-			// 制表符之前的四个空格触发4和8空格制表符停止的良好对齐。
-			s += "\n    \t"
-		}
-
-		//添加使用方法
-		s += usage
+		s += " " + usage
 		//如果不是空值
 		if !isZeroValue(flag, flag.DefValue) {
 			if _, ok := flag.Value.(*stringValue); ok {
@@ -91,6 +94,20 @@ func (f *FlagSet) PrintDefaults() {
 	// cmd
 	if len(f.cmds) > 0 {
 		fmt.Fprint(f.out(), "可用命令:\n")
+		cmdLabelWidth := 0
+		cmdLabels := make(map[string]string, len(f.cmds))
+		for _, cmd := range f.cmds {
+			cmdHide, ok := cmd.(CmdHide)
+			if ok && cmdHide.Hide() {
+				continue
+			}
+
+			label := f.commandDisplayName(cmd.Name())
+			cmdLabels[cmd.Name()] = label
+			if len(label) > cmdLabelWidth {
+				cmdLabelWidth = len(label)
+			}
+		}
 		for _, cmd := range f.cmds {
 			cmdHide, ok := cmd.(CmdHide)
 			if ok && cmdHide.Hide() {
@@ -108,7 +125,7 @@ func (f *FlagSet) PrintDefaults() {
 				description = "运行 " + cmd.Name()
 			}
 
-			fmt.Fprintf(f.out(), "  %-10s %s\n", cmd.Name(), description)
+			fmt.Fprintf(f.out(), "  %-*s %s\n", cmdLabelWidth, cmdLabels[cmd.Name()], description)
 		}
 		fmt.Fprint(f.out(), "\n")
 	}
@@ -126,8 +143,8 @@ func safeGetHelp(name string, fn func() string) (res string) {
 
 // 设置参数
 func (f *FlagSet) Set(name, value string) error {
-	flag, ok := f.formal[name]
-	if !ok {
+	flag := f.Lookup(name)
+	if flag == nil {
 		return fmt.Errorf("flag不存在 -%v", name)
 	}
 	err := flag.Value.Set(value)
@@ -137,7 +154,7 @@ func (f *FlagSet) Set(name, value string) error {
 	if f.actual == nil {
 		f.actual = make(map[string]*Flag)
 	}
-	f.actual[name] = flag
+	f.actual[flag.Name] = flag
 	return nil
 }
 
@@ -177,6 +194,14 @@ func sortFlags(flags map[string]*Flag) []*Flag {
 	return result
 }
 
+func flagDisplayName(flag *Flag) string {
+	names := []string{"-" + flag.Name}
+	for _, alias := range flag.Aliases {
+		names = append(names, "-"+alias)
+	}
+	return strings.Join(names, ", ")
+}
+
 // 按顺序访问全部flag
 func (f *FlagSet) VisitAll(fn func(*Flag)) {
 	for _, flag := range sortFlags(f.formal) {
@@ -192,7 +217,15 @@ func (f *FlagSet) Visit(fn func(*Flag)) {
 }
 
 // 查找参数是否存在
-func (f *FlagSet) Lookup(name string) *Flag { return f.formal[name] }
+func (f *FlagSet) Lookup(name string) *Flag {
+	if flag := f.formal[name]; flag != nil {
+		return flag
+	}
+	if realName, ok := f.flagAliases[name]; ok {
+		return f.formal[realName]
+	}
+	return nil
+}
 
 // NFlag返回已设置的标志数
 func (f *FlagSet) NFlag() int { return len(f.actual) }
@@ -385,7 +418,11 @@ func (f *FlagSet) parseOne() (bool, error) {
 		}
 	}
 	m := f.formal
-	flag, alreadythere := m[name] // BUG
+	canonicalName := name
+	if realName, ok := f.flagAliases[name]; ok {
+		canonicalName = realName
+	}
+	flag, alreadythere := m[canonicalName]
 	if !alreadythere {
 		if name == "help" || name == "h" { // special case for nice help message.
 			f.usage()
@@ -398,11 +435,11 @@ func (f *FlagSet) parseOne() (bool, error) {
 	if fv, ok := flag.Value.(boolFlag); ok && fv.IsBoolFlag() {
 		if hasValue {
 			if err := fv.Set(value); err != nil {
-				return false, f.failf("无效的 boolean 值 %q for -%s: %v", value, name, err)
+				return false, f.failf("无效的 boolean 值 %q for -%s: %v", value, canonicalName, err)
 			}
 		} else {
 			if err := fv.Set("true"); err != nil {
-				return false, f.failf("无效的 boolean 参数 %s: %v", name, err)
+				return false, f.failf("无效的 boolean 参数 %s: %v", canonicalName, err)
 			}
 		}
 	} else {
@@ -413,17 +450,17 @@ func (f *FlagSet) parseOne() (bool, error) {
 			value, f.args = f.args[0], f.args[1:]
 		}
 		if !hasValue {
-			return false, f.failf("flag 需要一个参数: -%s", name)
+			return false, f.failf("flag 需要一个参数: -%s", canonicalName)
 		}
 		if err := flag.Value.Set(value); err != nil {
-			return false, f.failf("无效的值 %q 参数: -%s: %v", value, name, err)
+			return false, f.failf("无效的值 %q 参数: -%s: %v", value, canonicalName, err)
 		}
 	}
 
 	if f.actual == nil {
 		f.actual = make(map[string]*Flag)
 	}
-	f.actual[name] = flag
+	f.actual[canonicalName] = flag
 	return true, nil
 }
 
@@ -467,6 +504,34 @@ func (f *FlagSet) VarFlag(value Value, name string, title, key string, env strin
 		f.formal = make(map[string]*Flag)
 	}
 	f.formal[name] = flag
+}
+
+func (f *FlagSet) Alias(name, alias string) {
+	if name == "" || alias == "" {
+		msg := "参数别名不能为空"
+		fmt.Fprintln(f.out(), msg)
+		panic(msg)
+	}
+	if name == alias {
+		return
+	}
+	flag := f.Lookup(name)
+	if flag == nil || flag.Name != name {
+		msg := fmt.Sprintf("参数不存在，无法设置别名: %s", name)
+		fmt.Fprintln(f.out(), msg)
+		panic(msg)
+	}
+	if f.Lookup(alias) != nil {
+		msg := fmt.Sprintf("参数别名重复定义: %s", alias)
+		fmt.Fprintln(f.out(), msg)
+		panic(msg)
+	}
+	if f.flagAliases == nil {
+		f.flagAliases = make(map[string]string)
+	}
+	f.flagAliases[alias] = name
+	flag.Aliases = append(flag.Aliases, alias)
+	sort.Strings(flag.Aliases)
 }
 
 // 定义隐藏类型类型

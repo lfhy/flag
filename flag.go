@@ -26,6 +26,7 @@ type Value interface {
 // Flag 结构体定义了命令行参数的属性
 type Flag struct {
 	Name        string // 命令行名称
+	Aliases     []string
 	EnvName     string // 环境变量名称
 	ConfigTitle string // 配置文件标题
 	ConfigKey   string // 配置文件关键字

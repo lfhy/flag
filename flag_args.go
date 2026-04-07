@@ -33,6 +33,14 @@ func RegisterCommand(cmd Cmd) {
 	GetDefaultFlagSet().RegisterCommand(cmd)
 }
 
+func Alias(name, alias string) {
+	GetDefaultFlagSet().Alias(name, alias)
+}
+
+func AliasCmd(name, alias string) {
+	GetDefaultFlagSet().AliasCmd(name, alias)
+}
+
 func Run() error {
 	return GetDefaultFlagSet().Run(os.Args[1:]...)
 }

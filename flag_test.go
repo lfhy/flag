@@ -119,6 +119,23 @@ type customInt int
 type customString string
 type customBool bool
 
+type aliasCmd struct {
+	ran bool
+}
+
+func (*aliasCmd) Name() string {
+	return "list"
+}
+
+func (c *aliasCmd) Run(args ...string) error {
+	c.ran = true
+	return nil
+}
+
+func (*aliasCmd) Help() string {
+	return "列出数据"
+}
+
 func TestVarSupportsDefinedTypes(t *testing.T) {
 	args := []string{"-port=7", "-name=demo", "-debug"}
 	f := flag.NewFlagSet("test", flag.PanicOnError)
@@ -186,4 +203,67 @@ func TestVarUnsupportedTypePanicOnError(t *testing.T) {
 		Value: &struct{}{},
 		Name:  "bad",
 	})
+}
+
+func TestFlagAliasParsesCanonicalFlag(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.PanicOnError)
+	user := f.String("user", "", "用户名")
+	f.Alias("user", "u")
+
+	if err := f.Parse([]string{"-u", "tom"}); err != nil {
+		t.Fatalf("Parse 返回错误: %v", err)
+	}
+	if *user != "tom" {
+		t.Fatalf("别名解析失败，got=%q", *user)
+	}
+	if got := f.Lookup("u"); got == nil || got.Name != "user" {
+		t.Fatalf("Lookup 应通过别名返回主 flag")
+	}
+}
+
+func TestFlagAliasSetUsesCanonicalFlag(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.PanicOnError)
+	user := f.String("user", "", "用户名")
+	f.Alias("user", "u")
+
+	if err := f.Set("u", "tom"); err != nil {
+		t.Fatalf("Set 返回错误: %v", err)
+	}
+	if *user != "tom" {
+		t.Fatalf("Set 别名失败，got=%q", *user)
+	}
+}
+
+func TestCommandAliasRunsSameCommand(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.ContinueOnError)
+	cmd := &aliasCmd{}
+	f.RegisterCommand(cmd)
+	f.AliasCmd("list", "ls")
+
+	if err := f.RunCmd("ls"); err != nil {
+		t.Fatalf("RunCmd 返回错误: %v", err)
+	}
+	if !cmd.ran {
+		t.Fatal("命令别名没有执行到原命令")
+	}
+}
+
+func TestPrintDefaultsShowsAliases(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.ContinueOnError)
+	f.String("user", "", "用户名")
+	f.Alias("user", "u")
+	cmd := &aliasCmd{}
+	f.RegisterCommand(cmd)
+	f.AliasCmd("list", "ls")
+
+	output := captureStdout(t, func() {
+		f.PrintDefaults()
+	})
+
+	if !strings.Contains(output, "-user, -u") {
+		t.Fatalf("帮助信息未输出参数别名:\n%s", output)
+	}
+	if !strings.Contains(output, "list, ls") {
+		t.Fatalf("帮助信息未输出命令别名:\n%s", output)
+	}
 }
