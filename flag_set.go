@@ -151,6 +151,16 @@ func (f *FlagSet) out() io.Writer {
 
 func (f *FlagSet) SetOutput(output io.Writer) { f.output = output }
 
+// 删除参数
+func (f *FlagSet) DelArg(arg string) {
+	for i, a := range f.args {
+		if a == arg {
+			f.args = append(f.args[:i], f.args[i+1:]...)
+			return
+		}
+	}
+}
+
 // 参数排序
 func sortFlags(flags map[string]*Flag) []*Flag {
 	list := make(sort.StringSlice, len(flags))

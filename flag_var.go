@@ -2,6 +2,7 @@ package flag
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -172,42 +173,26 @@ func (f *FlagSet) Var(opt *FlagVar) {
 	if opt.ConfigKey == "" && opt.ConfigSection != "" {
 		opt.ConfigKey = opt.Name
 	}
-	var value Value
-	switch data := opt.Value.(type) {
-	case bool:
-		value = newBoolValue(anyToBool(opt.DefaultValue), &data)
-	case *bool:
-		value = newBoolValue(anyToBool(opt.DefaultValue), data)
-	case string:
-		value = newStringValue(anyToString(opt.DefaultValue), &data)
-	case *string:
-		value = newStringValue(anyToString(opt.DefaultValue), data)
-	case int:
-		value = newIntValue(anyToInt(opt.DefaultValue), &data)
-	case *int:
-		value = newIntValue(anyToInt(opt.DefaultValue), data)
-	case int64:
-		value = newInt64Value(anyToInt64(opt.DefaultValue), &data)
-	case *int64:
-		value = newInt64Value(anyToInt64(opt.DefaultValue), data)
-	case uint:
-		value = newUintValue(anyToUint(opt.DefaultValue), &data)
-	case *uint:
-		value = newUintValue(anyToUint(opt.DefaultValue), data)
-	case uint64:
-		value = newUint64Value(anyToUint64(opt.DefaultValue), &data)
-	case *uint64:
-		value = newUint64Value(anyToUint64(opt.DefaultValue), data)
-	case float64:
-		value = newFloat64Value(anyToFloat64(opt.DefaultValue), &data)
-	case *float64:
-		value = newFloat64Value(anyToFloat64(opt.DefaultValue), data)
-	case time.Duration:
-		value = newDurationValue(anyToTimeDuration(opt.DefaultValue), &data)
-	case *time.Duration:
-		value = newDurationValue(anyToTimeDuration(opt.DefaultValue), data)
+	value, err := newReflectValue(opt.Value, opt.DefaultValue)
+	if err != nil {
+		f.handleVarError(err)
+		return
 	}
 	f.VarFlag(value, opt.Name, opt.ConfigSection, opt.ConfigKey, opt.Env, opt.Hidden, opt.Usage)
+}
+
+func (f *FlagSet) handleVarError(err error) {
+	switch f.errorHandling {
+	case ContinueOnError:
+		fmt.Fprintln(f.out(), err)
+	case ExitOnError:
+		fmt.Fprintln(f.out(), err)
+		os.Exit(2)
+	case PanicOnError:
+		panic(err)
+	default:
+		panic(err)
+	}
 }
 
 // Bool类型定义

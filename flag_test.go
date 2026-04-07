@@ -114,3 +114,76 @@ func TestRunCmdHelpPrintedOnce(t *testing.T) {
 		t.Fatalf("帮助请求不应重复打印 Help 文本:\n%s", output)
 	}
 }
+
+type customInt int
+type customString string
+type customBool bool
+
+func TestVarSupportsDefinedTypes(t *testing.T) {
+	args := []string{"-port=7", "-name=demo", "-debug"}
+	f := flag.NewFlagSet("test", flag.PanicOnError)
+
+	var port customInt
+	var name customString
+	var debug customBool
+
+	f.Var(&flag.FlagVar{
+		Value: &port,
+		Name:  "port",
+	})
+	f.Var(&flag.FlagVar{
+		Value: &name,
+		Name:  "name",
+	})
+	f.Var(&flag.FlagVar{
+		Value: &debug,
+		Name:  "debug",
+	})
+
+	if err := f.Parse(args); err != nil {
+		t.Fatalf("Parse 返回错误: %v", err)
+	}
+
+	if port != customInt(7) {
+		t.Fatalf("自定义 int 类型解析失败，got=%v", port)
+	}
+	if name != customString("demo") {
+		t.Fatalf("自定义 string 类型解析失败，got=%v", name)
+	}
+	if debug != customBool(true) {
+		t.Fatalf("自定义 bool 类型解析失败，got=%v", debug)
+	}
+}
+
+func TestVarUnsupportedTypeContinueOnError(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.ContinueOnError)
+
+	output := captureStdout(t, func() {
+		f.Var(&flag.FlagVar{
+			Value: &struct{}{},
+			Name:  "bad",
+		})
+	})
+
+	if !strings.Contains(output, "unsupported flag value type") {
+		t.Fatalf("应输出不支持类型的错误，实际输出: %q", output)
+	}
+	if got := f.Lookup("bad"); got != nil {
+		t.Fatalf("ContinueOnError 不应注册不支持的 flag")
+	}
+}
+
+func TestVarUnsupportedTypePanicOnError(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.PanicOnError)
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("PanicOnError 应触发 panic")
+		}
+	}()
+
+	f.Var(&flag.FlagVar{
+		Value: &struct{}{},
+		Name:  "bad",
+	})
+}

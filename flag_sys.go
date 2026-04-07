@@ -450,3 +450,8 @@ func PrintAll() { sysflag.PrintAll() }
 
 // SetOutput函数用于设置命令行参数的输出
 func SetOutput(output io.Writer) { sysflag.SetOutput(output) }
+
+// 删除参数
+func DelArg(arg string) {
+	sysflag.DelArg(arg)
+}

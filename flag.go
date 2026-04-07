@@ -47,6 +47,14 @@ func defaultUsage(f *FlagSet) {
 
 // isZeroValue 判断参数值是否为默认值
 func isZeroValue(flag *Flag, value string) bool {
+	if _, ok := flag.Value.(usageTypeProvider); ok {
+		switch value {
+		case "false", "", "0", "0s":
+			return true
+		}
+		return false
+	}
+
 	typ := reflect.TypeOf(flag.Value)
 	var z reflect.Value
 	if typ.Kind() == reflect.Ptr {
@@ -86,6 +94,8 @@ func UnquoteUsage(flag *Flag) (name string, usage string) {
 	switch flag.Value.(type) {
 	case boolFlag:
 		name = ""
+	case usageTypeProvider:
+		name = flag.Value.(usageTypeProvider).UsageType()
 	case *durationValue:
 		name = "duration"
 	case *float64Value:
