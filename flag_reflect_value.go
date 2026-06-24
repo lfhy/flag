@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -68,6 +69,12 @@ func newReflectValue(target interface{}, defaultValue interface{}) (Value, error
 	case reflect.Float32, reflect.Float64:
 		elem.SetFloat(anyToFloat64(defaultValue))
 		return &value, nil
+	case reflect.Slice:
+		// 仅支持 []string 切片；其它元素类型暂不支持
+		if elem.Type().Elem().Kind() != reflect.String {
+			return nil, fmt.Errorf("unsupported flag value type %T", target)
+		}
+		return newReflectStringsValue(elem, defaultValue), nil
 	default:
 		return nil, fmt.Errorf("unsupported flag value type %T", target)
 	}
@@ -160,6 +167,11 @@ func (v *reflectValue) UsageType() string {
 	switch v.elem.Kind() {
 	case reflect.String:
 		return "string"
+	case reflect.Slice:
+		if v.elem.Type().Elem().Kind() == reflect.String {
+			return "strings"
+		}
+		return "value"
 	case reflect.Float32, reflect.Float64:
 		return "float"
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
@@ -170,3 +182,66 @@ func (v *reflectValue) UsageType() string {
 		return "value"
 	}
 }
+
+// reflectStringsValue 通过反射绑定到一个 []string 切片，
+// 行为与 stringsValue 一致：逗号分隔解析 + 多次传参累加
+type reflectStringsValue struct {
+	elem reflect.Value
+}
+
+// newReflectStringsValue 创建一个绑定到反射 []string 元素的 reflectStringsValue，
+// 并把默认值（逗号分隔字符串或 []string）写入元素
+func newReflectStringsValue(elem reflect.Value, defaultValue interface{}) *reflectStringsValue {
+	v := &reflectStringsValue{elem: elem}
+	v.setDefault(defaultValue)
+	return v
+}
+
+// setDefault 将默认值转换并写入切片元素
+func (v *reflectStringsValue) setDefault(defaultValue interface{}) {
+	switch data := defaultValue.(type) {
+	case nil:
+		v.elem.Set(reflect.ValueOf([]string{}))
+	case []string:
+		v.elem.Set(reflect.ValueOf(data))
+	case []interface{}:
+		out := make([]string, 0, len(data))
+		for _, d := range data {
+			out = append(out, anyToString(d))
+		}
+		v.elem.Set(reflect.ValueOf(out))
+	case string:
+		v.elem.Set(reflect.ValueOf(splitStrings(data)))
+	default:
+		v.elem.Set(reflect.ValueOf([]string{}))
+	}
+}
+
+// Set 将逗号分隔的字符串解析并累加到切片
+func (v *reflectStringsValue) Set(s string) error {
+	parts := splitStrings(s)
+	if v.elem.Len() == 0 {
+		v.elem.Set(reflect.ValueOf(parts))
+	} else {
+		v.elem.Set(reflect.AppendSlice(v.elem, reflect.ValueOf(parts)))
+	}
+	return nil
+}
+
+// Get 返回切片值
+func (v *reflectStringsValue) Get() interface{} { return v.elem.Interface() }
+
+// String 返回切片的逗号连接字符串
+func (v *reflectStringsValue) String() string {
+	if v.elem.Len() == 0 {
+		return ""
+	}
+	parts := make([]string, 0, v.elem.Len())
+	for i := 0; i < v.elem.Len(); i++ {
+		parts = append(parts, v.elem.Index(i).String())
+	}
+	return strings.Join(parts, ",")
+}
+
+// UsageType 返回类型显示名
+func (v *reflectStringsValue) UsageType() string { return "strings" }

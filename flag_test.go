@@ -297,3 +297,94 @@ func TestPrintDefaultsShowsAliases(t *testing.T) {
 		t.Fatalf("帮助信息未输出命令别名:\n%s", output)
 	}
 }
+
+func TestStringsVarDefault(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.PanicOnError)
+	tags := f.Strings("tags", "a,b,c", "标签")
+	if got := len(*tags); got != 3 {
+		t.Fatalf("默认值切分错误，got=%d", got)
+	}
+	if (*tags)[0] != "a" || (*tags)[1] != "b" || (*tags)[2] != "c" {
+		t.Fatalf("默认值解析错误，got=%v", *tags)
+	}
+}
+
+func TestStringsVarCommaSplit(t *testing.T) {
+	args := []string{"-tags=x,y,z"}
+	f := flag.NewFlagSet("test", flag.PanicOnError)
+	tags := f.Strings("tags", "", "标签")
+	if err := f.Parse(args); err != nil {
+		t.Fatalf("Parse 返回错误: %v", err)
+	}
+	if len(*tags) != 3 || (*tags)[0] != "x" || (*tags)[1] != "y" || (*tags)[2] != "z" {
+		t.Fatalf("逗号分隔解析错误，got=%v", *tags)
+	}
+}
+
+func TestStringsVarAppend(t *testing.T) {
+	args := []string{"-tags=a", "-tags=b", "-tags=c,d"}
+	f := flag.NewFlagSet("test", flag.PanicOnError)
+	tags := f.Strings("tags", "", "标签")
+	if err := f.Parse(args); err != nil {
+		t.Fatalf("Parse 返回错误: %v", err)
+	}
+	if len(*tags) != 4 {
+		t.Fatalf("多次传参累加失败，got=%v", *tags)
+	}
+	if (*tags)[0] != "a" || (*tags)[1] != "b" || (*tags)[2] != "c" || (*tags)[3] != "d" {
+		t.Fatalf("多次传参累加内容错误，got=%v", *tags)
+	}
+}
+
+func TestStringsHidden(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.PanicOnError)
+	tags := f.StringsHidden("tags", "x,y", "标签")
+	if len(*tags) != 2 || (*tags)[0] != "x" || (*tags)[1] != "y" {
+		t.Fatalf("Hidden 默认值解析错误，got=%v", *tags)
+	}
+	if fl := f.Lookup("tags"); fl == nil || !fl.Hidden {
+		t.Fatalf("Hidden 标志未正确注册")
+	}
+}
+
+// 验证 Var() 通用入口也支持 []string（反射路径）
+func TestVarStringSliceDefault(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.PanicOnError)
+	var tags []string
+	f.Var(&flag.FlagVar{
+		Value:        &tags,
+		Name:         "tags",
+		DefaultValue: "go,linux",
+	})
+	if len(tags) != 2 || tags[0] != "go" || tags[1] != "linux" {
+		t.Fatalf("Var 默认值解析错误，got=%v", tags)
+	}
+}
+
+func TestVarStringSliceAppend(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.PanicOnError)
+	var tags []string
+	f.Var(&flag.FlagVar{
+		Value: &tags,
+		Name:  "tags",
+	})
+	if err := f.Parse([]string{"-tags=a,b", "-tags=c"}); err != nil {
+		t.Fatalf("Parse 返回错误: %v", err)
+	}
+	if len(tags) != 3 || tags[0] != "a" || tags[1] != "b" || tags[2] != "c" {
+		t.Fatalf("Var 多次传参累加错误，got=%v", tags)
+	}
+}
+
+func TestVarStringSliceRawDefault(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.PanicOnError)
+	var tags []string
+	f.Var(&flag.FlagVar{
+		Value:        &tags,
+		Name:         "tags",
+		DefaultValue: []string{"x", "y", "z"},
+	})
+	if len(tags) != 3 || tags[0] != "x" || tags[1] != "y" || tags[2] != "z" {
+		t.Fatalf("Var 直接 []string 默认值解析错误，got=%v", tags)
+	}
+}

@@ -105,6 +105,8 @@ func UnquoteUsage(flag *Flag) (name string, usage string) {
 		name = "int"
 	case *stringValue:
 		name = "string"
+	case *stringsValue:
+		name = "strings"
 	case *uintValue, *uint64Value:
 		name = "uint"
 	}
