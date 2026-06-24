@@ -228,3 +228,199 @@ func (s *stringsValue) String() string {
 	}
 	return strings.Join(*s.value, ",")
 }
+
+// -- []int Value
+// intsValue 表示一组int值，通过逗号分隔的字符串设置，支持多次设置累加
+type intsValue struct {
+	value *[]int
+}
+
+// newIntsValue 创建一个新的intsValue类型的值，并将默认值val赋值给指针p
+func newIntsValue(val []int, p *[]int) *intsValue {
+	*p = val
+	return &intsValue{value: p}
+}
+
+// Set 将逗号分隔的字符串解析为多个int值并累加到切片
+func (i *intsValue) Set(v string) error {
+	if i.value == nil {
+		return fmt.Errorf("ints value pointer is nil")
+	}
+	parts := strings.Split(v, ",")
+	out := make([]int, 0, len(parts))
+	for _, p := range parts {
+		n, err := strconv.ParseInt(strings.TrimSpace(p), 0, 64)
+		if err != nil {
+			return err
+		}
+		out = append(out, int(n))
+	}
+	if len(*i.value) == 0 {
+		*i.value = out
+	} else {
+		*i.value = append(*i.value, out...)
+	}
+	return nil
+}
+
+// Get 返回intsValue类型的值
+func (i *intsValue) Get() interface{} { return []int(*i.value) }
+
+// String 返回intsValue类型的值的字符串表示，使用逗号连接
+func (i *intsValue) String() string {
+	if len(*i.value) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(*i.value))
+	for _, n := range *i.value {
+		parts = append(parts, strconv.Itoa(n))
+	}
+	return strings.Join(parts, ",")
+}
+
+// -- []int64 Value
+// int64sValue 表示一组int64值，通过逗号分隔的字符串设置，支持多次设置累加
+type int64sValue struct {
+	value *[]int64
+}
+
+// newInt64sValue 创建一个新的int64sValue类型的值，并将默认值val赋值给指针p
+func newInt64sValue(val []int64, p *[]int64) *int64sValue {
+	*p = val
+	return &int64sValue{value: p}
+}
+
+// Set 将逗号分隔的字符串解析为多个int64值并累加到切片
+func (i *int64sValue) Set(v string) error {
+	if i.value == nil {
+		return fmt.Errorf("int64s value pointer is nil")
+	}
+	parts := strings.Split(v, ",")
+	out := make([]int64, 0, len(parts))
+	for _, p := range parts {
+		n, err := strconv.ParseInt(strings.TrimSpace(p), 0, 64)
+		if err != nil {
+			return err
+		}
+		out = append(out, n)
+	}
+	if len(*i.value) == 0 {
+		*i.value = out
+	} else {
+		*i.value = append(*i.value, out...)
+	}
+	return nil
+}
+
+// Get 返回int64sValue类型的值
+func (i *int64sValue) Get() interface{} { return []int64(*i.value) }
+
+// String 返回int64sValue类型的值的字符串表示，使用逗号连接
+func (i *int64sValue) String() string {
+	if len(*i.value) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(*i.value))
+	for _, n := range *i.value {
+		parts = append(parts, strconv.FormatInt(n, 10))
+	}
+	return strings.Join(parts, ",")
+}
+
+// -- []uint Value
+// uintsValue 表示一组uint值，通过逗号分隔的字符串设置，支持多次设置累加
+type uintsValue struct {
+	value *[]uint
+}
+
+// newUintsValue 创建一个新的uintsValue类型的值，并将默认值val赋值给指针p
+func newUintsValue(val []uint, p *[]uint) *uintsValue {
+	*p = val
+	return &uintsValue{value: p}
+}
+
+// Set 将逗号分隔的字符串解析为多个uint值并累加到切片
+func (i *uintsValue) Set(v string) error {
+	if i.value == nil {
+		return fmt.Errorf("uints value pointer is nil")
+	}
+	parts := strings.Split(v, ",")
+	out := make([]uint, 0, len(parts))
+	for _, p := range parts {
+		n, err := strconv.ParseUint(strings.TrimSpace(p), 0, 64)
+		if err != nil {
+			return err
+		}
+		out = append(out, uint(n))
+	}
+	if len(*i.value) == 0 {
+		*i.value = out
+	} else {
+		*i.value = append(*i.value, out...)
+	}
+	return nil
+}
+
+// Get 返回uintsValue类型的值
+func (i *uintsValue) Get() interface{} { return []uint(*i.value) }
+
+// String 返回uintsValue类型的值的字符串表示，使用逗号连接
+func (i *uintsValue) String() string {
+	if len(*i.value) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(*i.value))
+	for _, n := range *i.value {
+		parts = append(parts, strconv.FormatUint(uint64(n), 10))
+	}
+	return strings.Join(parts, ",")
+}
+
+// -- []uint64 Value
+// uint64sValue 表示一组uint64值，通过逗号分隔的字符串设置，支持多次设置累加
+type uint64sValue struct {
+	value *[]uint64
+}
+
+// newUint64sValue 创建一个新的uint64sValue类型的值，并将默认值val赋值给指针p
+func newUint64sValue(val []uint64, p *[]uint64) *uint64sValue {
+	*p = val
+	return &uint64sValue{value: p}
+}
+
+// Set 将逗号分隔的字符串解析为多个uint64值并累加到切片
+func (i *uint64sValue) Set(v string) error {
+	if i.value == nil {
+		return fmt.Errorf("uint64s value pointer is nil")
+	}
+	parts := strings.Split(v, ",")
+	out := make([]uint64, 0, len(parts))
+	for _, p := range parts {
+		n, err := strconv.ParseUint(strings.TrimSpace(p), 0, 64)
+		if err != nil {
+			return err
+		}
+		out = append(out, n)
+	}
+	if len(*i.value) == 0 {
+		*i.value = out
+	} else {
+		*i.value = append(*i.value, out...)
+	}
+	return nil
+}
+
+// Get 返回uint64sValue类型的值
+func (i *uint64sValue) Get() interface{} { return []uint64(*i.value) }
+
+// String 返回uint64sValue类型的值的字符串表示，使用逗号连接
+func (i *uint64sValue) String() string {
+	if len(*i.value) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(*i.value))
+	for _, n := range *i.value {
+		parts = append(parts, strconv.FormatUint(n, 10))
+	}
+	return strings.Join(parts, ",")
+}

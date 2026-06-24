@@ -70,11 +70,8 @@ func newReflectValue(target interface{}, defaultValue interface{}) (Value, error
 		elem.SetFloat(anyToFloat64(defaultValue))
 		return &value, nil
 	case reflect.Slice:
-		// 仅支持 []string 切片；其它元素类型暂不支持
-		if elem.Type().Elem().Kind() != reflect.String {
-			return nil, fmt.Errorf("unsupported flag value type %T", target)
-		}
-		return newReflectStringsValue(elem, defaultValue), nil
+		// 仅支持元素为 string/int*/uint* 的切片；其它元素类型暂不支持
+		return newReflectSliceValue(elem, defaultValue)
 	default:
 		return nil, fmt.Errorf("unsupported flag value type %T", target)
 	}
@@ -171,7 +168,7 @@ func (v *reflectValue) UsageType() string {
 		if v.elem.Type().Elem().Kind() == reflect.String {
 			return "strings"
 		}
-		return "value"
+		return sliceUsageType(v.elem.Type().Elem())
 	case reflect.Float32, reflect.Float64:
 		return "float"
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
@@ -183,65 +180,150 @@ func (v *reflectValue) UsageType() string {
 	}
 }
 
-// reflectStringsValue 通过反射绑定到一个 []string 切片，
-// 行为与 stringsValue 一致：逗号分隔解析 + 多次传参累加
-type reflectStringsValue struct {
-	elem reflect.Value
+// reflectSliceValue 通过反射绑定到一个切片，行为与 *Value 系列一致：
+// 逗号分隔解析 + 多次传参累加，支持 []string/[]int*/[]uint*
+type reflectSliceValue struct {
+	elem     reflect.Value
+	elemType reflect.Type
+	parse    elemParser
 }
 
-// newReflectStringsValue 创建一个绑定到反射 []string 元素的 reflectStringsValue，
-// 并把默认值（逗号分隔字符串或 []string）写入元素
-func newReflectStringsValue(elem reflect.Value, defaultValue interface{}) *reflectStringsValue {
-	v := &reflectStringsValue{elem: elem}
+// elemParser 解析单个字符串为匹配 elemType 的 reflect.Value
+type elemParser func(string) (reflect.Value, error)
+
+// sliceElemParser 按 elemType.Kind 返回对应的元素解析器
+func sliceElemParser(t reflect.Type) (elemParser, error) {
+	switch t.Kind() {
+	case reflect.String:
+		return func(s string) (reflect.Value, error) {
+			return reflect.ValueOf(s), nil
+		}, nil
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return func(s string) (reflect.Value, error) {
+			n, err := strconv.ParseInt(strings.TrimSpace(s), 0, 64)
+			if err != nil {
+				return reflect.Value{}, err
+			}
+			v := reflect.New(t).Elem()
+			v.SetInt(n)
+			return v, nil
+		}, nil
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return func(s string) (reflect.Value, error) {
+			n, err := strconv.ParseUint(strings.TrimSpace(s), 0, 64)
+			if err != nil {
+				return reflect.Value{}, err
+			}
+			v := reflect.New(t).Elem()
+			v.SetUint(n)
+			return v, nil
+		}, nil
+	default:
+		return nil, fmt.Errorf("unsupported slice element type %s", t)
+	}
+}
+
+// newReflectSliceValue 创建一个绑定到反射切片的 reflectSliceValue
+func newReflectSliceValue(elem reflect.Value, defaultValue interface{}) (Value, error) {
+	parse, err := sliceElemParser(elem.Type().Elem())
+	if err != nil {
+		return nil, fmt.Errorf("unsupported flag value type %s", elem.Type())
+	}
+	v := &reflectSliceValue{elem: elem, elemType: elem.Type().Elem(), parse: parse}
 	v.setDefault(defaultValue)
-	return v
+	return v, nil
 }
 
 // setDefault 将默认值转换并写入切片元素
-func (v *reflectStringsValue) setDefault(defaultValue interface{}) {
+func (v *reflectSliceValue) setDefault(defaultValue interface{}) {
+	slice := reflect.MakeSlice(reflect.SliceOf(v.elemType), 0, 0)
 	switch data := defaultValue.(type) {
 	case nil:
-		v.elem.Set(reflect.ValueOf([]string{}))
-	case []string:
-		v.elem.Set(reflect.ValueOf(data))
-	case []interface{}:
-		out := make([]string, 0, len(data))
-		for _, d := range data {
-			out = append(out, anyToString(d))
-		}
-		v.elem.Set(reflect.ValueOf(out))
+		// 空切片
 	case string:
-		v.elem.Set(reflect.ValueOf(splitStrings(data)))
+		for _, p := range splitStrings(data) {
+			if ev, err := v.parse(p); err == nil {
+				slice = reflect.Append(slice, ev)
+			}
+		}
 	default:
-		v.elem.Set(reflect.ValueOf([]string{}))
+		// 反射遍历任意切片/数组
+		rv := reflect.ValueOf(defaultValue)
+		if rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array {
+			for i := 0; i < rv.Len(); i++ {
+				ev := rv.Index(i)
+				if ev.Type() == v.elemType {
+					slice = reflect.Append(slice, ev)
+				} else if ev.Type().ConvertibleTo(v.elemType) {
+					slice = reflect.Append(slice, ev.Convert(v.elemType))
+				}
+			}
+		}
 	}
+	v.elem.Set(slice)
 }
 
 // Set 将逗号分隔的字符串解析并累加到切片
-func (v *reflectStringsValue) Set(s string) error {
+func (v *reflectSliceValue) Set(s string) error {
 	parts := splitStrings(s)
-	if v.elem.Len() == 0 {
-		v.elem.Set(reflect.ValueOf(parts))
-	} else {
-		v.elem.Set(reflect.AppendSlice(v.elem, reflect.ValueOf(parts)))
+	slice := v.elem
+	for _, p := range parts {
+		ev, err := v.parse(p)
+		if err != nil {
+			return err
+		}
+		slice = reflect.Append(slice, ev)
 	}
+	v.elem.Set(slice)
 	return nil
 }
 
 // Get 返回切片值
-func (v *reflectStringsValue) Get() interface{} { return v.elem.Interface() }
+func (v *reflectSliceValue) Get() interface{} { return v.elem.Interface() }
 
 // String 返回切片的逗号连接字符串
-func (v *reflectStringsValue) String() string {
+func (v *reflectSliceValue) String() string {
 	if v.elem.Len() == 0 {
 		return ""
 	}
 	parts := make([]string, 0, v.elem.Len())
 	for i := 0; i < v.elem.Len(); i++ {
-		parts = append(parts, v.elem.Index(i).String())
+		parts = append(parts, fmt.Sprintf("%v", v.elem.Index(i).Interface()))
 	}
 	return strings.Join(parts, ",")
 }
 
 // UsageType 返回类型显示名
-func (v *reflectStringsValue) UsageType() string { return "strings" }
+func (v *reflectSliceValue) UsageType() string {
+	return sliceUsageType(v.elemType)
+}
+
+// sliceUsageType 按 elemType.Kind 返回 UsageType 显示名
+func sliceUsageType(t reflect.Type) string {
+	switch t.Kind() {
+	case reflect.String:
+		return "strings"
+	case reflect.Int:
+		return "ints"
+	case reflect.Int8:
+		return "int8s"
+	case reflect.Int16:
+		return "int16s"
+	case reflect.Int32:
+		return "int32s"
+	case reflect.Int64:
+		return "int64s"
+	case reflect.Uint:
+		return "uints"
+	case reflect.Uint8:
+		return "uint8s"
+	case reflect.Uint16:
+		return "uint16s"
+	case reflect.Uint32:
+		return "uint32s"
+	case reflect.Uint64:
+		return "uint64s"
+	default:
+		return "value"
+	}
+}

@@ -388,3 +388,101 @@ func TestVarStringSliceRawDefault(t *testing.T) {
 		t.Fatalf("Var 直接 []string 默认值解析错误，got=%v", tags)
 	}
 }
+
+// ============================== 数值切片测试 ==============================
+
+func TestIntsVarDefault(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.PanicOnError)
+	ids := f.Ints("ids", "1,2,3", "ID列表")
+	if len(*ids) != 3 || (*ids)[0] != 1 || (*ids)[1] != 2 || (*ids)[2] != 3 {
+		t.Fatalf("Ints 默认值解析错误，got=%v", *ids)
+	}
+}
+
+func TestIntsVarCommaSplit(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.PanicOnError)
+	ids := f.Ints("ids", "", "ID列表")
+	if err := f.Parse([]string{"-ids=4,5,6"}); err != nil {
+		t.Fatalf("Parse 返回错误: %v", err)
+	}
+	if len(*ids) != 3 || (*ids)[0] != 4 || (*ids)[1] != 5 || (*ids)[2] != 6 {
+		t.Fatalf("Ints 逗号解析错误，got=%v", *ids)
+	}
+}
+
+func TestIntsVarAppend(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.PanicOnError)
+	ids := f.Ints("ids", "", "ID列表")
+	if err := f.Parse([]string{"-ids=1", "-ids=2,3"}); err != nil {
+		t.Fatalf("Parse 返回错误: %v", err)
+	}
+	if len(*ids) != 3 || (*ids)[0] != 1 || (*ids)[1] != 2 || (*ids)[2] != 3 {
+		t.Fatalf("Ints 多次累加错误，got=%v", *ids)
+	}
+}
+
+func TestInt64sVarAppend(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.PanicOnError)
+	ids := f.Int64s("ids", "", "ID列表")
+	if err := f.Parse([]string{"-ids=100", "-ids=200"}); err != nil {
+		t.Fatalf("Parse 返回错误: %v", err)
+	}
+	if len(*ids) != 2 || (*ids)[0] != 100 || (*ids)[1] != 200 {
+		t.Fatalf("Int64s 累加错误，got=%v", *ids)
+	}
+}
+
+func TestUintsVarAppend(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.PanicOnError)
+	ids := f.Uints("ids", "", "ID列表")
+	if err := f.Parse([]string{"-ids=7,8", "-ids=9"}); err != nil {
+		t.Fatalf("Parse 返回错误: %v", err)
+	}
+	if len(*ids) != 3 || (*ids)[0] != 7 || (*ids)[1] != 8 || (*ids)[2] != 9 {
+		t.Fatalf("Uints 累加错误，got=%v", *ids)
+	}
+}
+
+func TestUint64sVarAppend(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.PanicOnError)
+	ids := f.Uint64s("ids", "", "ID列表")
+	if err := f.Parse([]string{"-ids=1,2", "-ids=3"}); err != nil {
+		t.Fatalf("Parse 返回错误: %v", err)
+	}
+	if len(*ids) != 3 || (*ids)[0] != 1 || (*ids)[1] != 2 || (*ids)[2] != 3 {
+		t.Fatalf("Uint64s 累加错误，got=%v", *ids)
+	}
+}
+
+func TestIntsHidden(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.PanicOnError)
+	ids := f.IntsHidden("ids", "1,2", "ID列表")
+	if len(*ids) != 2 || (*ids)[0] != 1 || (*ids)[1] != 2 {
+		t.Fatalf("Ints Hidden 默认值错误，got=%v", *ids)
+	}
+	if fl := f.Lookup("ids"); fl == nil || !fl.Hidden {
+		t.Fatalf("Ints Hidden 未正确注册")
+	}
+}
+
+// Var() 反射路径支持数值切片
+func TestVarIntSliceAppend(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.PanicOnError)
+	var ids []int
+	f.Var(&flag.FlagVar{Value: &ids, Name: "ids"})
+	if err := f.Parse([]string{"-ids=1,2", "-ids=3"}); err != nil {
+		t.Fatalf("Parse 返回错误: %v", err)
+	}
+	if len(ids) != 3 || ids[0] != 1 || ids[1] != 2 || ids[2] != 3 {
+		t.Fatalf("Var []int 累加错误，got=%v", ids)
+	}
+}
+
+func TestVarUint64SliceDefault(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.PanicOnError)
+	var ids []uint64
+	f.Var(&flag.FlagVar{Value: &ids, Name: "ids", DefaultValue: "5,10"})
+	if len(ids) != 2 || ids[0] != 5 || ids[1] != 10 {
+		t.Fatalf("Var []uint64 默认值错误，got=%v", ids)
+	}
+}
