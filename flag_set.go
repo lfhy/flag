@@ -23,6 +23,8 @@ type FlagSet struct {
 	output        io.Writer //如果没有设置则输出至Stdout
 	config        *Config
 	cmds          []Cmd
+	// configFlagName 用于指定配置文件路径的参数名，默认为 DefaultConfigFlagName ("c")
+	configFlagName string
 }
 
 func (f *FlagSet) GetConfig() *Config {
@@ -261,11 +263,29 @@ func (f *FlagSet) failf(format string, a ...interface{}) error {
 // 定义默认的配置文件标志名
 var DefaultConfigFlagName = "c"
 
+// ConfigFlagName 返回当前 FlagSet 用于指定配置文件的参数名。
+// 未显式设置时返回 DefaultConfigFlagName。
+func (f *FlagSet) ConfigFlagName() string {
+	if f.configFlagName == "" {
+		return DefaultConfigFlagName
+	}
+	return f.configFlagName
+}
+
+// SetConfigFlagName 设置当前 FlagSet 用于指定配置文件的参数名。
+// 允许用户自定义（例如改为 "conf"），互不影响其它 FlagSet。
+// 必须在 Parse 之前调用。
+func (f *FlagSet) SetConfigFlagName(name string) {
+	f.configFlagName = name
+}
+
 // 解析参数
 func (f *FlagSet) Parse(arguments []string) error {
-	// 如果没有定义默认的配置文件标志名，则添加一个隐藏的标志名
-	if _, ok := f.formal[DefaultConfigFlagName]; !ok {
-		f.StringHidden(DefaultConfigFlagName, "", "默认读取的配置文件 如果参数没有值则会读取配置文件中的值")
+	// 取当前 FlagSet 使用的配置文件参数名
+	configFlagName := f.ConfigFlagName()
+	// 如果没有定义配置文件参数名，则添加一个隐藏的参数
+	if _, ok := f.formal[configFlagName]; !ok {
+		f.StringHidden(configFlagName, "", "默认读取的配置文件 如果参数没有值则会读取配置文件中的值")
 	}
 
 	// 标记已经解析过
@@ -294,16 +314,16 @@ func (f *FlagSet) Parse(arguments []string) error {
 
 	// 读取配置文件
 	var cFile string
-	// 如果定义了默认的配置文件标志名，则读取其值
-	if cf := f.formal[DefaultConfigFlagName]; cf != nil {
+	// 如果定义了配置文件参数名，则读取其值
+	if cf := f.formal[configFlagName]; cf != nil {
 		cFile = cf.Value.String()
 	}
-	// 如果实际解析时定义了默认的配置文件标志名，则读取其值
-	if cf := f.actual[DefaultConfigFlagName]; cf != nil {
+	// 如果实际解析时定义了配置文件参数名，则读取其值
+	if cf := f.actual[configFlagName]; cf != nil {
 		cFile = cf.Value.String()
 	}
 
-	// 如果没有定义默认的配置文件标志名，则从未解析的参数中查找
+	// 如果没有定义配置文件参数名，则从未解析的参数中查找
 	if cFile == "" {
 		cFile = f.findConfigArgInUnresolved()
 	}
@@ -541,7 +561,7 @@ func (f *FlagSet) HiddenVar(value Value, name string, usage string) {
 
 // 查找是否配置文件没有被解析
 func (f *FlagSet) findConfigArgInUnresolved() string {
-	configArg := "-" + DefaultConfigFlagName
+	configArg := "-" + f.ConfigFlagName()
 	for i := 0; i < len(f.args); i++ {
 		if strings.HasPrefix(f.args[i], configArg) {
 			if f.args[i] == configArg && i+1 < len(f.args) {

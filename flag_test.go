@@ -486,3 +486,50 @@ func TestVarUint64SliceDefault(t *testing.T) {
 		t.Fatalf("Var []uint64 默认值错误，got=%v", ids)
 	}
 }
+
+// 自定义配置文件参数名
+func TestCustomConfigFlagName(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.ContinueOnError)
+	f.SetConfigFlagName("conf")
+
+	// 确认 ConfigFlagName() 反映自定义值
+	if got := f.ConfigFlagName(); got != "conf" {
+		t.Fatalf("ConfigFlagName() 返回 %q，期望 conf", got)
+	}
+
+	var host string
+	f.StringVar(&host, "host", "default", "host")
+
+	// 临时写一个配置文件
+	tmpDir := t.TempDir()
+	cfgPath := tmpDir + "/app.toml"
+	if err := os.WriteFile(cfgPath, []byte(`host = "from-config"`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// 用自定义参数名 -conf 指定配置文件（不应报错）
+	if err := f.Parse([]string{"-conf", cfgPath}); err != nil {
+		t.Fatalf("Parse 返回错误: %v", err)
+	}
+
+	// 自动注册的隐藏参数名应是 conf 而非 c
+	if fl := f.Lookup("conf"); fl == nil {
+		t.Fatalf("未注册自定义配置参数名 conf")
+	}
+	if fl := f.Lookup("c"); fl != nil {
+		t.Fatalf("不应再注册默认的 c 参数")
+	}
+
+	// 配置文件参数本身被正确解析（actual 里有值）
+	if cf := f.Lookup("conf"); cf == nil || cf.Value.String() != cfgPath {
+		t.Fatalf("配置参数 conf 未正确取到值，got=%v", cf)
+	}
+}
+
+// 未设置时回落到 DefaultConfigFlagName
+func TestDefaultConfigFlagNameFallback(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.ContinueOnError)
+	if got := f.ConfigFlagName(); got != "c" {
+		t.Fatalf("未设置时应回落到 c，got=%q", got)
+	}
+}

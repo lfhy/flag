@@ -170,6 +170,7 @@ $ APP_HOST=0.0.0.0 go run app.go -c config.toml
 要点：
 
 - `-c` 是自动注册的隐藏参数，无需手动定义；未指定时跳过文件解析
+- 可通过 `fs.SetConfigFlagName("conf")` 自定义参数名（FlagSet 级别，互不影响，默认 `"c"`）
 - 配置文件按 `ConfigTitle.ConfigKey`（即 `IntConfigVar` 第二、三个参数）的节/键读取
 - 可通过 `flag.DefaultConfigFlagName` 修改默认标志名（默认 `"c"`）
 - 解析完成后用 `flag.GetConfig()` 获取 `*Config`，支持读写回文件

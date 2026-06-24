@@ -170,6 +170,7 @@ $ APP_HOST=0.0.0.0 go run app.go -c config.toml
 Notes:
 
 - `-c` is an auto-registered hidden flag, no need to define it manually; file parsing is skipped when not specified
+- The flag name can be customized via `fs.SetConfigFlagName("conf")` (per-FlagSet, independent; defaults to `"c"`)
 - The config file is read by `ConfigTitle.ConfigKey` (the 2nd and 3rd args of `IntConfigVar`)
 - The default flag name can be changed via `flag.DefaultConfigFlagName` (default `"c"`)
 - After parsing, use `flag.GetConfig()` to obtain `*Config`, which supports reading/writing back to the file
