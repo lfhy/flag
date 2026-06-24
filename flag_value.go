@@ -3,6 +3,7 @@ package flag
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -190,3 +191,40 @@ func (d *durationValue) Get() interface{} { return time.Duration(*d) }
 
 // String 返回durationValue类型的值的字符串表示
 func (d *durationValue) String() string { return (*time.Duration)(d).String() }
+
+// -- []string Value
+// stringsValue 表示一组字符串值，通过逗号分隔的字符串设置，支持多次设置累加
+type stringsValue struct {
+	value *[]string
+}
+
+// newStringsValue 创建一个新的stringsValue类型的值，并将默认值val赋值给指针p
+func newStringsValue(val []string, p *[]string) *stringsValue {
+	*p = val
+	return &stringsValue{value: p}
+}
+
+// Set 将逗号分隔的字符串解析为多个值并累加到切片
+func (s *stringsValue) Set(v string) error {
+	if s.value == nil {
+		return fmt.Errorf("strings value pointer is nil")
+	}
+	parts := strings.Split(v, ",")
+	if len(*s.value) == 0 {
+		*s.value = parts
+	} else {
+		*s.value = append(*s.value, parts...)
+	}
+	return nil
+}
+
+// Get 返回stringsValue类型的值
+func (s *stringsValue) Get() interface{} { return []string(*s.value) }
+
+// String 返回stringsValue类型的值的字符串表示，使用逗号连接
+func (s *stringsValue) String() string {
+	if len(*s.value) == 0 {
+		return ""
+	}
+	return strings.Join(*s.value, ",")
+}
