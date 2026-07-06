@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -29,6 +30,34 @@ func TestVar(t *testing.T) {
 	}
 	fmt.Println("测试通过")
 
+}
+
+func TestStringSliceAndIntSliceValues(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.PanicOnError)
+
+	var tags flag.StringSlice
+	var ids flag.IntSlice
+
+	f.StringSliceVar(&tags, "tags", nil, "标签")
+	f.IntSliceVar(&ids, "ids", nil, "ID列表")
+
+	if err := f.Parse([]string{"-tags=go,linux", "-tags=cli", "-ids=1,2", "-ids=3"}); err != nil {
+		t.Fatalf("Parse 返回错误: %v", err)
+	}
+
+	if want := (flag.StringSlice{"go", "linux", "cli"}); !reflect.DeepEqual(tags, want) {
+		t.Fatalf("StringSlice 解析失败，got=%v want=%v", tags, want)
+	}
+	if got := tags.String(); got != "go,linux,cli" {
+		t.Fatalf("StringSlice String 失败，got=%q", got)
+	}
+
+	if want := (flag.IntSlice{1, 2, 3}); !reflect.DeepEqual(ids, want) {
+		t.Fatalf("IntSlice 解析失败，got=%v want=%v", ids, want)
+	}
+	if got := ids.String(); got != "1,2,3" {
+		t.Fatalf("IntSlice String 失败，got=%q", got)
+	}
 }
 
 // 测试打印表格

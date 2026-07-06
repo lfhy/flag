@@ -193,57 +193,60 @@ func (d *durationValue) Get() interface{} { return time.Duration(*d) }
 func (d *durationValue) String() string { return (*time.Duration)(d).String() }
 
 // -- []string Value
-// stringsValue 表示一组字符串值，通过逗号分隔的字符串设置，支持多次设置累加
-type stringsValue struct {
-	value *[]string
-}
+// StringSlice 表示一组字符串值，通过逗号分隔的字符串设置，支持多次设置累加
+type StringSlice []string
+
+type stringsValue = StringSlice
 
 // newStringsValue 创建一个新的stringsValue类型的值，并将默认值val赋值给指针p
 func newStringsValue(val []string, p *[]string) *stringsValue {
 	*p = val
-	return &stringsValue{value: p}
+	return (*stringsValue)(p)
 }
 
 // Set 将逗号分隔的字符串解析为多个值并累加到切片
 func (s *stringsValue) Set(v string) error {
-	if s.value == nil {
+	if s == nil {
 		return fmt.Errorf("strings value pointer is nil")
 	}
 	parts := strings.Split(v, ",")
-	if len(*s.value) == 0 {
-		*s.value = parts
+	if len(*s) == 0 {
+		*s = StringSlice(parts)
 	} else {
-		*s.value = append(*s.value, parts...)
+		*s = append(*s, parts...)
 	}
 	return nil
 }
 
 // Get 返回stringsValue类型的值
-func (s *stringsValue) Get() interface{} { return []string(*s.value) }
+func (s *stringsValue) Get() interface{} { return []string(*s) }
 
 // String 返回stringsValue类型的值的字符串表示，使用逗号连接
 func (s *stringsValue) String() string {
-	if len(*s.value) == 0 {
+	if len(*s) == 0 {
 		return ""
 	}
-	return strings.Join(*s.value, ",")
+	return strings.Join([]string(*s), ",")
 }
 
+// UsageType 返回帮助信息中的类型显示名
+func (s *stringsValue) UsageType() string { return "strings" }
+
 // -- []int Value
-// intsValue 表示一组int值，通过逗号分隔的字符串设置，支持多次设置累加
-type intsValue struct {
-	value *[]int
-}
+// IntSlice 表示一组int值，通过逗号分隔的字符串设置，支持多次设置累加
+type IntSlice []int
+
+type intsValue = IntSlice
 
 // newIntsValue 创建一个新的intsValue类型的值，并将默认值val赋值给指针p
 func newIntsValue(val []int, p *[]int) *intsValue {
 	*p = val
-	return &intsValue{value: p}
+	return (*intsValue)(p)
 }
 
 // Set 将逗号分隔的字符串解析为多个int值并累加到切片
 func (i *intsValue) Set(v string) error {
-	if i.value == nil {
+	if i == nil {
 		return fmt.Errorf("ints value pointer is nil")
 	}
 	parts := strings.Split(v, ",")
@@ -255,28 +258,31 @@ func (i *intsValue) Set(v string) error {
 		}
 		out = append(out, int(n))
 	}
-	if len(*i.value) == 0 {
-		*i.value = out
+	if len(*i) == 0 {
+		*i = IntSlice(out)
 	} else {
-		*i.value = append(*i.value, out...)
+		*i = append(*i, out...)
 	}
 	return nil
 }
 
 // Get 返回intsValue类型的值
-func (i *intsValue) Get() interface{} { return []int(*i.value) }
+func (i *intsValue) Get() interface{} { return []int(*i) }
 
 // String 返回intsValue类型的值的字符串表示，使用逗号连接
 func (i *intsValue) String() string {
-	if len(*i.value) == 0 {
+	if len(*i) == 0 {
 		return ""
 	}
-	parts := make([]string, 0, len(*i.value))
-	for _, n := range *i.value {
+	parts := make([]string, 0, len(*i))
+	for _, n := range *i {
 		parts = append(parts, strconv.Itoa(n))
 	}
 	return strings.Join(parts, ",")
 }
+
+// UsageType 返回帮助信息中的类型显示名
+func (i *intsValue) UsageType() string { return "ints" }
 
 // -- []int64 Value
 // int64sValue 表示一组int64值，通过逗号分隔的字符串设置，支持多次设置累加

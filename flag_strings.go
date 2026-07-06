@@ -48,6 +48,12 @@ func (f *FlagSet) StringsVar(p *[]string, name string, value string, usage strin
 	f.FullVar(newStringsValue(stringsDefault(value), p), name, "", "", "", usage)
 }
 
+// 定义一个StringSlice类型的Flag，并设置其全名和默认值，不设置标题、键和环境变量
+func (f *FlagSet) StringSliceVar(p *StringSlice, name string, value []string, usage string) {
+	*p = StringSlice(value)
+	f.FullVar(p, name, "", "", "", usage)
+}
+
 // 定义一个[]string类型的Flag，并设置其全名、标题、键、环境变量、默认值和用法，返回一个指向该Flag的指针
 func (f *FlagSet) StringsFull(name, title, key, env string, value string, usage string) *[]string {
 	p := new([]string)
@@ -148,6 +154,12 @@ func (f *ArgsFlag) StringsVar(p *[]string, name string, value string, usage stri
 	f.FullVar(newStringsValue(stringsDefault(value), p), name, "", "", "", usage)
 }
 
+// 定义一个StringSlice类型的变量，并设置其名称、默认值和用法（ArgsFlag）
+func (f *ArgsFlag) StringSliceVar(p *StringSlice, name string, value []string, usage string) {
+	*p = StringSlice(value)
+	f.FullVar(p, name, "", "", "", usage)
+}
+
 // 定义一个[]string类型的变量，并设置其名称、标题、键、环境变量、默认值和用法，并返回该变量的指针（ArgsFlag）
 func (f *ArgsFlag) StringsFull(name, title, key, env string, value string, usage string) *[]string {
 	p := new([]string)
@@ -246,6 +258,11 @@ func StringsEnvVar(p *[]string, name string, env string, value string, usage str
 // 定义一个字符串切片类型的标志，并设置其名称、默认值和用法
 func StringsVar(p *[]string, name string, value string, usage string) {
 	sysflag.FullVar(newStringsValue(stringsDefault(value), p), name, "", "", "", usage)
+}
+
+// 定义一个StringSlice类型的标志，并设置其名称、默认值和用法
+func StringSliceVar(p *StringSlice, name string, value []string, usage string) {
+	sysflag.StringSliceVar(p, name, value, usage)
 }
 
 // 定义一个字符串切片类型的标志，并设置其名称、标题、键、环境变量、默认值和用法，并返回指针

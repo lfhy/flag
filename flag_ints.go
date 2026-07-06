@@ -53,6 +53,12 @@ func (f *FlagSet) IntsVar(p *[]int, name string, value string, usage string) {
 	f.FullVar(newIntsValue(parseIntsDefault(value), p), name, "", "", "", usage)
 }
 
+// 定义一个IntSlice类型的Flag，并设置其全名和默认值，不设置标题、键和环境变量
+func (f *FlagSet) IntSliceVar(p *IntSlice, name string, value []int, usage string) {
+	*p = IntSlice(value)
+	f.FullVar(p, name, "", "", "", usage)
+}
+
 // 定义一个[]int类型的Flag，并设置其全名、标题、键、环境变量、默认值和用法，返回一个指向该Flag的指针
 func (f *FlagSet) IntsFull(name, title, key, env string, value string, usage string) *[]int {
 	p := new([]int)
@@ -251,6 +257,12 @@ func (f *ArgsFlag) IntsEnvVar(p *[]int, name string, env string, value string, u
 // 定义一个[]int类型的变量，并设置其名称、默认值和用法（ArgsFlag）
 func (f *ArgsFlag) IntsVar(p *[]int, name string, value string, usage string) {
 	f.FullVar(newIntsValue(parseIntsDefault(value), p), name, "", "", "", usage)
+}
+
+// 定义一个IntSlice类型的变量，并设置其名称、默认值和用法（ArgsFlag）
+func (f *ArgsFlag) IntSliceVar(p *IntSlice, name string, value []int, usage string) {
+	*p = IntSlice(value)
+	f.FullVar(p, name, "", "", "", usage)
 }
 
 // 定义一个[]int类型的变量，并设置其名称、标题、键、环境变量、默认值和用法，并返回该变量的指针（ArgsFlag）
@@ -452,6 +464,11 @@ func IntsEnvVar(p *[]int, name string, env string, value string, usage string) {
 // 定义一个[]int类型的标志，并设置其名称、默认值和用法
 func IntsVar(p *[]int, name string, value string, usage string) {
 	sysflag.FullVar(newIntsValue(parseIntsDefault(value), p), name, "", "", "", usage)
+}
+
+// 定义一个IntSlice类型的标志，并设置其名称、默认值和用法
+func IntSliceVar(p *IntSlice, name string, value []int, usage string) {
+	sysflag.IntSliceVar(p, name, value, usage)
 }
 
 // 定义一个[]int类型的标志，并设置其名称、标题、键、环境变量、默认值和用法，并返回指针
