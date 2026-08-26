@@ -14,6 +14,7 @@ An enhanced command-line argument parsing library for Go. It stays compatible wi
 - **Config file integration**: powered by [viper](https://github.com/spf13/viper); supports JSON / TOML / YAML, and changes can be written back to the config
 - **Hidden flags**: register flags that don't appear in `--help` but are still parsed
 - **Subcommands & aliases**: register subcommands (à la `git`) and set aliases for flags/subcommands (e.g. `-v` ↔ `--verbose`)
+- **Interspersed positional arguments and flags**: `FlagSet.Parse` accepts flags before or after positional arguments; boolean flags do not consume paths, and tokens after `--` remain literal positional arguments. Top-level subcommand dispatch can use `ParseStandard` to stop at the first positional argument
 - **Slice types**: built-in `Strings / Ints / Int64s / Uints / Uint64s` with comma-separated parsing and automatic accumulation across repeated flags
 - **Generic reflection entry `Var()`**: a single API covering all primitive and slice types
 - **Colored help output**: built-in ANSI color printing; `PrintAll` lists all flags as a table

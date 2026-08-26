@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -279,8 +280,18 @@ func (f *FlagSet) SetConfigFlagName(name string) {
 	f.configFlagName = name
 }
 
-// 解析参数
+// Parse 解析 FlagSet 参数，允许选项位于位置参数前后；顶层 ArgsFlag 和 Run 保持在子命令前停止解析。
 func (f *FlagSet) Parse(arguments []string) error {
+	return f.parse(arguments, true)
+}
+
+// ParseStandard 按标准命令行语义解析，在首个位置参数处停止，适用于顶层子命令分发前的全局选项。
+func (f *FlagSet) ParseStandard(arguments []string) error {
+	return f.parse(arguments, false)
+}
+
+// parse 按 interspersed 决定是否跨越位置参数继续解析选项，供顶层子命令入口保留标准停止语义。
+func (f *FlagSet) parse(arguments []string, interspersed bool) error {
 	// 取当前 FlagSet 使用的配置文件参数名
 	configFlagName := f.ConfigFlagName()
 	// 如果没有定义配置文件参数名，则添加一个隐藏的参数
@@ -290,26 +301,43 @@ func (f *FlagSet) Parse(arguments []string) error {
 
 	// 标记已经解析过
 	f.parsed = true
-	// 保存参数
+	// 解析队列与最终位置参数分开保存，使 flag 可以出现在任意位置参数之后。
 	f.args = arguments
-	// 循环解析参数
-	for {
+	positionals := make([]string, 0, len(arguments))
+	for len(f.args) > 0 {
+		// 交错解析时，"--" 之后的内容必须保持字面量，不能再把 -c 或其他选项误解析。
+		if interspersed && f.args[0] == "--" {
+			positionals = append(positionals, f.args[1:]...)
+			f.args = nil
+			break
+		}
+
 		seen, err := f.parseOne()
 		if seen {
 			continue
 		}
-		if err == nil {
+		if err != nil {
+			// 根据错误处理方式处理错误。
+			switch f.errorHandling {
+			case ContinueOnError:
+				return err
+			case ExitOnError:
+				os.Exit(2)
+			case PanicOnError:
+				panic(err)
+			}
+		}
+
+		if !interspersed {
 			break
 		}
-		// 根据错误处理方式处理错误
-		switch f.errorHandling {
-		case ContinueOnError:
-			return err
-		case ExitOnError:
-			os.Exit(2)
-		case PanicOnError:
-			panic(err)
-		}
+
+		// parseOne 返回未识别且无错误时，队首一定是位置参数；取走后继续扫描后续选项。
+		positionals = append(positionals, f.args[0])
+		f.args = f.args[1:]
+	}
+	if interspersed {
+		f.args = positionals
 	}
 
 	// 读取配置文件
@@ -321,11 +349,6 @@ func (f *FlagSet) Parse(arguments []string) error {
 	// 如果实际解析时定义了配置文件参数名，则读取其值
 	if cf := f.actual[configFlagName]; cf != nil {
 		cFile = cf.Value.String()
-	}
-
-	// 如果没有定义配置文件参数名，则从未解析的参数中查找
-	if cFile == "" {
-		cFile = f.findConfigArgInUnresolved()
 	}
 
 	// 如果找到了配置文件，则进行解析
@@ -458,7 +481,13 @@ func (f *FlagSet) parseOne() (bool, error) {
 				return false, f.failf("无效的 boolean 值 %q for -%s: %v", value, canonicalName, err)
 			}
 		} else {
-			if err := fv.Set("true"); err != nil {
+			// 兼容历史上的 "-flag false" 写法；仅标准布尔字面量会被消费，路径等位置参数仍留给调用方。
+			if len(f.args) > 0 && isBooleanLiteral(f.args[0]) {
+				value, f.args = f.args[0], f.args[1:]
+			} else {
+				value = "true"
+			}
+			if err := fv.Set(value); err != nil {
 				return false, f.failf("无效的 boolean 参数 %s: %v", canonicalName, err)
 			}
 		}
@@ -482,6 +511,12 @@ func (f *FlagSet) parseOne() (bool, error) {
 	}
 	f.actual[canonicalName] = flag
 	return true, nil
+}
+
+// isBooleanLiteral 判断参数是否是标准库 strconv 接受的布尔字面量，供无等号的布尔选项兼容显式取值。
+func isBooleanLiteral(value string) bool {
+	_, err := strconv.ParseBool(value)
+	return err == nil
 }
 
 // 定义类型
@@ -557,23 +592,6 @@ func (f *FlagSet) Alias(name, alias string) {
 // 参数3:使用方法
 func (f *FlagSet) HiddenVar(value Value, name string, usage string) {
 	f.FullHiddenVar(value, name, "", "", "", usage)
-}
-
-// 查找是否配置文件没有被解析
-func (f *FlagSet) findConfigArgInUnresolved() string {
-	configArg := "-" + f.ConfigFlagName()
-	for i := 0; i < len(f.args); i++ {
-		if strings.HasPrefix(f.args[i], configArg) {
-			if f.args[i] == configArg && i+1 < len(f.args) {
-				return f.args[i+1]
-			}
-
-			if strings.HasPrefix(f.args[i], configArg+"=") {
-				return f.args[i][len(configArg)+1:]
-			}
-		}
-	}
-	return ""
 }
 
 // 应用到环境变量

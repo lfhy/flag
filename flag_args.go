@@ -15,10 +15,9 @@ func NewArgsFlag() *ArgsFlag {
 	return &ArgsFlag{NewFlagSet(os.Args[0], ExitOnError)}
 }
 
-// 解析ArgsFlag结构体的Parse方法
+// Parse 解析顶层进程参数，并在首个位置参数（通常是子命令）处停止，避免把子命令选项当作全局选项。
 func (f *ArgsFlag) Parse() error {
-	// 调用f的Parse方法，传入os.Args[1:]作为参数
-	return f.FlagSet.Parse(os.Args[1:])
+	return f.FlagSet.ParseStandard(os.Args[1:])
 }
 
 // Usage函数用于打印使用方法

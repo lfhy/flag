@@ -32,6 +32,124 @@ func TestVar(t *testing.T) {
 
 }
 
+// TestParseAllowsInterspersedArguments 验证位置参数前后均可出现选项，且非布尔选项仍能消费以负号开头的值。
+func TestParseAllowsInterspersedArguments(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.ContinueOnError)
+	var detail bool
+	var count int
+	f.BoolVar(&detail, "detail", false, "输出详情")
+	f.IntVar(&count, "count", 0, "计数")
+
+	if err := f.Parse([]string{"/mnt/osca", "-count", "-1", "middle", "-detail"}); err != nil {
+		t.Fatalf("交错参数解析失败: %v", err)
+	}
+	if !detail || count != -1 {
+		t.Fatalf("选项值错误: detail=%t count=%d", detail, count)
+	}
+	if want := []string{"/mnt/osca", "middle"}; !reflect.DeepEqual(f.Args(), want) {
+		t.Fatalf("位置参数 = %v，want %v", f.Args(), want)
+	}
+}
+
+// TestParseStandardStopsAtFirstPositional 验证顶层解析在子命令名处停止，不会抢先解析子命令选项。
+func TestParseStandardStopsAtFirstPositional(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.ContinueOnError)
+	var debug bool
+	f.BoolVar(&debug, "debug", false, "全局调试")
+
+	if err := f.ParseStandard([]string{"-debug", "mount-stat", "-detail", "/mnt/osca"}); err != nil {
+		t.Fatalf("标准参数解析失败: %v", err)
+	}
+	if !debug {
+		t.Fatal("全局 -debug 未解析")
+	}
+	if want := []string{"mount-stat", "-detail", "/mnt/osca"}; !reflect.DeepEqual(f.Args(), want) {
+		t.Fatalf("标准位置参数 = %v，want %v", f.Args(), want)
+	}
+}
+
+// TestParseKeepsBooleanPathAndDoubleDashLiteral 验证布尔选项不会吞掉路径，且 -- 后的 - 参数保持位置参数语义。
+func TestParseKeepsBooleanPathAndDoubleDashLiteral(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.ContinueOnError)
+	var detail bool
+	f.BoolVar(&detail, "detail", false, "输出详情")
+
+	if err := f.Parse([]string{"-detail", "/mnt/osca", "--", "-detail", "literal"}); err != nil {
+		t.Fatalf("布尔参数解析失败: %v", err)
+	}
+	if !detail {
+		t.Fatal("-detail 未设置为 true")
+	}
+	if want := []string{"/mnt/osca", "-detail", "literal"}; !reflect.DeepEqual(f.Args(), want) {
+		t.Fatalf("位置参数 = %v，want %v", f.Args(), want)
+	}
+}
+
+// TestParseSupportsSeparatedBooleanLiteral 验证兼容历史上的 -detail false 写法，同时拒绝无效的显式布尔值。
+func TestParseSupportsSeparatedBooleanLiteral(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.ContinueOnError)
+	var detail bool
+	f.BoolVar(&detail, "detail", true, "输出详情")
+
+	if err := f.Parse([]string{"target", "-detail", "false"}); err != nil {
+		t.Fatalf("分离布尔值解析失败: %v", err)
+	}
+	if detail {
+		t.Fatal("-detail false 未设置为 false")
+	}
+	if want := []string{"target"}; !reflect.DeepEqual(f.Args(), want) {
+		t.Fatalf("位置参数 = %v，want %v", f.Args(), want)
+	}
+
+	invalid := flag.NewFlagSet("invalid", flag.ContinueOnError)
+	invalid.Bool("detail", false, "输出详情")
+	if err := invalid.Parse([]string{"-detail=invalid"}); err == nil {
+		t.Fatal("无效的显式布尔值未返回错误")
+	}
+}
+
+// TestParseReadsConfigAfterPositionals 验证 -c 即使位于位置参数之后也会按正常选项解析并加载配置。
+func TestParseReadsConfigAfterPositionals(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.ContinueOnError)
+	var host string
+	f.StringConfigVar(&host, "host", "", "host", "default", "服务地址")
+
+	cfgPath := t.TempDir() + "/app.toml"
+	if err := os.WriteFile(cfgPath, []byte(`host = "from-config"`), 0644); err != nil {
+		t.Fatalf("写入配置文件失败: %v", err)
+	}
+	if err := f.Parse([]string{"target", "-c", cfgPath}); err != nil {
+		t.Fatalf("交错配置参数解析失败: %v", err)
+	}
+	if host != "from-config" {
+		t.Fatalf("位置参数后的配置未生效: host=%q", host)
+	}
+	if want := []string{"target"}; !reflect.DeepEqual(f.Args(), want) {
+		t.Fatalf("位置参数 = %v，want %v", f.Args(), want)
+	}
+}
+
+// TestParseDoesNotReadConfigAfterDoubleDash 验证 -- 后的 -c 只作为位置参数，不能触发配置文件读取。
+func TestParseDoesNotReadConfigAfterDoubleDash(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.ContinueOnError)
+	var host string
+	f.StringConfigVar(&host, "host", "", "host", "default", "服务地址")
+
+	cfgPath := t.TempDir() + "/app.toml"
+	if err := os.WriteFile(cfgPath, []byte(`host = "from-config"`), 0644); err != nil {
+		t.Fatalf("写入配置文件失败: %v", err)
+	}
+	if err := f.Parse([]string{"target", "--", "-c", cfgPath}); err != nil {
+		t.Fatalf("双横线参数解析失败: %v", err)
+	}
+	if host != "default" {
+		t.Fatalf("-- 后的配置参数意外生效: host=%q", host)
+	}
+	if want := []string{"target", "-c", cfgPath}; !reflect.DeepEqual(f.Args(), want) {
+		t.Fatalf("位置参数 = %v，want %v", f.Args(), want)
+	}
+}
+
 func TestStringSliceAndIntSliceValues(t *testing.T) {
 	f := flag.NewFlagSet("test", flag.PanicOnError)
 
@@ -141,6 +259,20 @@ func TestRunCmdHelpPrintedOnce(t *testing.T) {
 	}
 	if strings.Contains(output, "运行CMD1") {
 		t.Fatalf("帮助请求不应重复打印 Help 文本:\n%s", output)
+	}
+}
+
+// TestRunLeavesSubcommandFlagsForCommand 验证顶层 Run 在命令名处停止，将后续选项完整交给子命令 FlagSet。
+func TestRunLeavesSubcommandFlagsForCommand(t *testing.T) {
+	f := flag.NewFlagSet("test", flag.ContinueOnError)
+	command := &helpCmd{}
+	f.RegisterCommand(command)
+
+	if err := f.Run("cmd1", "-p", "value"); err != nil {
+		t.Fatalf("运行子命令失败: %v", err)
+	}
+	if command.param != "value" {
+		t.Fatalf("子命令参数 = %q，want value", command.param)
 	}
 }
 

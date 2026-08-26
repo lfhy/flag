@@ -54,7 +54,8 @@ func (f *FlagSet) RegisterCommand(cmd Cmd) {
 
 func (f *FlagSet) Run(args ...string) error {
 	if !f.parsed {
-		err := f.Parse(args)
+		// 命令名后的参数应由子命令自行解析，顶层只读取全局选项和第一个命令名。
+		err := f.ParseStandard(args)
 		if err != nil {
 			return err
 		}
