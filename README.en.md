@@ -89,7 +89,7 @@ if err := flag.Parse(); err != nil { panic(err) }
 fmt.Println(*follow) // resolved from -follow/-f, FOLLOW, the config file, or the default
 ```
 
-`.Config("title.key")` maps to the `[title]` section and `key` in the config file. Pass `-c config.toml` to read the file, or use `fs.SetConfigFlagName("conf")` to select `-conf`. Environment variables are **inputs**, not destinations: parsing does not write them. Priority is **CLI > environment > config file > default**.
+`.Config("title.key")` maps to the `[title]` section and `key` in the config file. Without `ConfigFile`, pass `-c config.toml` to read the file, or use `fs.SetConfigFlagName("conf")` to select `-conf`. Environment variables are **inputs**, not destinations: parsing does not write them. Priority is **CLI > environment > config file > default**.
 
 Use `.Var(&data)` to bind an existing variable; it registers the flag immediately and does not return a pointer:
 
@@ -163,9 +163,9 @@ cfg.WriteToConfig("server", "port", 9000)
 
 Priority: **CLI > environment variables > config file > default value**.
 
-### 5. 🌟 Unified config entry: `-c` to specify a config file (signature feature)
+### 5. 🌟 Unified config entry: a default file or `-c` to specify one (signature feature)
 
-This is the core capability that sets the library apart from the standard `flag`. When `Parse()` runs it auto-registers a hidden `-c` flag; passing a config file path makes **CLI args, the config file, and environment variables merge in a single parse according to priority** — no manual viper calls required.
+This is the core capability that sets the library apart from the standard `flag`. `Parse()` auto-registers a hidden `-c` flag; without `ConfigFile`, a file path must be passed. **CLI args, the config file, and environment variables merge in a single parse according to priority** — no manual viper calls required.
 
 ```go
 // app.go
@@ -188,7 +188,7 @@ Suppose there's a `config.toml`:
 port = 9000
 ```
 
-Three sources merged:
+Without `ConfigFile`, three sources merge as follows:
 
 ```bash
 # 1. Use the config file only
@@ -204,10 +204,26 @@ $ APP_HOST=0.0.0.0 go run app.go -c config.toml
 # Host=0.0.0.0 (env > default)
 ```
 
+Set a default config file to load it without `-c` when it exists. A missing default file is quietly skipped; an explicitly selected missing file or a file that cannot be parsed returns an error:
+
+```go
+flag.ConfigFile("config.toml") // call before flag.Parse(); bind keys with Config/IntConfigVar, etc.
+```
+
+`go run app.go` uses `config.toml`; `go run app.go -c other.toml` uses the explicit file instead. Priority remains CLI > environment variables > config file > default value. The path flag can also be named fluently (choose one of these alternatives):
+
+```go
+flag.ConfigFile("config.toml").Name("config")  // only -config, no -c
+flag.ConfigFile("config.toml").Alias("config") // accept both -c and -config
+
+fs := flag.NewFlagSet("app", flag.ContinueOnError)
+fs.ConfigFile("config.toml").Alias("config") // applies only to this FlagSet
+```
+
 Notes:
 
-- `-c` is an auto-registered hidden flag, no need to define it manually; file parsing is skipped when not specified
-- The flag name can be customized via `fs.SetConfigFlagName("conf")` (per-FlagSet, independent; defaults to `"c"`)
+- `-c` is an auto-registered hidden flag, no need to define it manually; without `ConfigFile` or an explicit path, file parsing is skipped
+- The legacy `fs.SetConfigFlagName("conf")` still customizes the flag name (per-FlagSet, independent; defaults to `"c"`); if `.Name(...)` is also used, the last name set before parsing wins
 - The config file is read by `ConfigTitle.ConfigKey` (the 2nd and 3rd args of `IntConfigVar`)
 - The default flag name can be changed via `flag.DefaultConfigFlagName` (default `"c"`)
 - After parsing, use `flag.GetConfig()` to obtain `*Config`, which supports reading/writing back to the file

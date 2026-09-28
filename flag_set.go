@@ -27,11 +27,24 @@ type FlagSet struct {
 	cmds          []Cmd
 	// configFlagName 用于指定配置文件路径的参数名，默认为 DefaultConfigFlagName ("c")
 	configFlagName string
+	configFile     *ConfigFileBuilder
 }
 
 func (f *FlagSet) GetConfig() *Config {
 	// 避免无初始化
 	if f.config == nil {
+		if f.configFile != nil {
+			path := f.configFile.path
+			if flag := f.formal[f.ConfigFlagName()]; flag != nil && f.actual[flag.Name] != nil {
+				path = flag.Value.String()
+			}
+			config := newReadOnlyConfig(path)
+			if path != "" {
+				_ = config.ReadInConfig()
+			}
+			f.config = &config
+			return f.config
+		}
 		config := newConfig("config.toml")
 		f.config = &config
 	}
@@ -294,6 +307,11 @@ func (f *FlagSet) ParseStandard(arguments []string) error {
 
 // parse 按 interspersed 决定是否跨越位置参数继续解析选项，供顶层子命令入口保留标准停止语义。
 func (f *FlagSet) parse(arguments []string, interspersed bool) error {
+	if f.configFile != nil {
+		// Each parse may select a different path; avoid returning a stale config
+		// after a previous Parse or an early GetConfig call.
+		f.config = nil
+	}
 	for _, builder := range f.pending {
 		if err := builder.registerPending(); err != nil {
 			switch f.errorHandling {
@@ -310,6 +328,19 @@ func (f *FlagSet) parse(arguments []string, interspersed bool) error {
 
 	// 取当前 FlagSet 使用的配置文件参数名
 	configFlagName := f.ConfigFlagName()
+	if f.configFile != nil {
+		if err := f.configFile.register(configFlagName); err != nil {
+			switch f.errorHandling {
+			case ContinueOnError:
+				return err
+			case ExitOnError:
+				os.Exit(2)
+			case PanicOnError:
+				panic(err)
+			}
+			return err
+		}
+	}
 	// 如果没有定义配置文件参数名，则添加一个隐藏的参数
 	if _, ok := f.formal[configFlagName]; !ok {
 		if f.Lookup(configFlagName) != nil {
@@ -324,7 +355,14 @@ func (f *FlagSet) parse(arguments []string, interspersed bool) error {
 			}
 			return err
 		}
-		f.StringHidden(configFlagName, "", "默认读取的配置文件 如果参数没有值则会读取配置文件中的值")
+		defaultPath := ""
+		if f.configFile != nil {
+			defaultPath = f.configFile.path
+		}
+		f.StringHidden(configFlagName, defaultPath, "默认读取的配置文件 如果参数没有值则会读取配置文件中的值")
+	}
+	if f.configFile != nil {
+		f.configFile.installAliases(configFlagName)
 	}
 
 	// 标记已经解析过
@@ -387,9 +425,10 @@ func (f *FlagSet) parse(arguments []string, interspersed bool) error {
 	if cf := f.formal[configFlagName]; cf != nil {
 		cFile = cf.Value.String()
 	}
-	// 如果实际解析时定义了配置文件参数名，则读取其值
-	if cf := f.actual[configFlagName]; cf != nil {
-		cFile = cf.Value.String()
+	// A configured default is used even when an existing user-defined path
+	// flag has a different default. An explicitly assigned empty value disables it.
+	if f.configFile != nil && f.actual[configFlagName] == nil {
+		cFile = f.configFile.path
 	}
 
 	// 如果找到了配置文件，则进行解析
@@ -409,6 +448,17 @@ func (f *FlagSet) parse(arguments []string, interspersed bool) error {
 				}
 				return err
 			}
+		} else if f.configFile != nil && (f.actual[configFlagName] != nil || !os.IsNotExist(err)) {
+			parseErr := f.failf("无法读取配置文件 %q: %v", cFile, err)
+			switch f.errorHandling {
+			case ContinueOnError:
+				return parseErr
+			case ExitOnError:
+				os.Exit(2)
+			case PanicOnError:
+				panic(parseErr)
+			}
+			return parseErr
 		}
 	}
 
@@ -419,7 +469,15 @@ func (f *FlagSet) parse(arguments []string, interspersed bool) error {
 // 参数1:配置文件路径
 // 参数2:覆盖传参
 func (f *FlagSet) ParseFile(config string, rewritevalue bool) error {
-	fconfig := newConfig(config)
+	var fconfig Config
+	if f.configFile != nil {
+		fconfig = newReadOnlyConfig(config)
+		if err := fconfig.ReadInConfig(); err != nil {
+			return f.failf("无法读取配置文件 %q: %v", config, err)
+		}
+	} else {
+		fconfig = newConfig(config)
+	}
 	f.config = &fconfig
 	for name, flag := range f.formal {
 		//忽略已设置的参数；参数优先于文件

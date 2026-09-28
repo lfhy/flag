@@ -89,7 +89,7 @@ if err := flag.Parse(); err != nil { panic(err) }
 fmt.Println(*follow) // 根据 -follow/-f、FOLLOW、配置文件或默认值确定
 ```
 
-`.Config("title.key")` 映射配置文件的 `[title]` 节和 `key` 键；要读取文件，在命令行传 `-c config.toml`（或通过 `fs.SetConfigFlagName("conf")` 改用 `-conf`）。环境变量是**输入来源**，解析不会将值写回环境变量。优先级为 **命令行 > 环境变量 > 配置文件 > 默认值**。
+`.Config("title.key")` 映射配置文件的 `[title]` 节和 `key` 键；未设置 `ConfigFile` 时，要读取文件需在命令行传 `-c config.toml`（或通过 `fs.SetConfigFlagName("conf")` 改用 `-conf`）。环境变量是**输入来源**，解析不会将值写回环境变量。优先级为 **命令行 > 环境变量 > 配置文件 > 默认值**。
 
 已有变量可用 `.Var(&data)` 绑定；它会立即注册参数，不返回指针：
 
@@ -163,9 +163,9 @@ cfg.WriteToConfig("server", "port", 9000)
 
 优先级：**命令行 > 环境变量 > 配置文件 > 默认值**。
 
-### 5. 🌟 统一配置入口：`-c` 指定配置文件（特有能力）
+### 5. 🌟 统一配置入口：默认文件或 `-c` 指定配置文件（特有能力）
 
-这是本库区别于标准库 `flag` 的核心特性。`Parse()` 时会自动注册一个隐藏参数 `-c`，传入配置文件路径后，**命令行参数、配置文件、环境变量会在一次解析中按优先级统一合并**，无需手动调用 viper。
+这是本库区别于标准库 `flag` 的核心特性。`Parse()` 时会自动注册一个隐藏参数 `-c`；未设置 `ConfigFile` 时，需传入配置文件路径。**命令行参数、配置文件、环境变量会在一次解析中按优先级统一合并**，无需手动调用 viper。
 
 ```go
 // app.go
@@ -188,7 +188,7 @@ func init() {
 port = 9000
 ```
 
-三种来源合并：
+未设置 `ConfigFile` 时，三种来源合并：
 
 ```bash
 # 1. 完全使用配置文件
@@ -204,10 +204,26 @@ $ APP_HOST=0.0.0.0 go run app.go -c config.toml
 # Host=0.0.0.0（环境变量 > 默认值）
 ```
 
+设置默认配置文件后，不传 `-c` 也会自动读取存在的文件；默认文件不存在时跳过读取，显式指定的文件不存在或文件无法解析时返回错误：
+
+```go
+flag.ConfigFile("config.toml") // 在 flag.Parse() 前调用；绑定的配置键仍通过 Config/IntConfigVar 等定义
+```
+
+`go run app.go` 使用 `config.toml`；`go run app.go -c other.toml` 则使用显式指定的文件。命令行参数 > 环境变量 > 配置文件 > 默认值的优先级不变。配置路径参数还可链式命名（以下为分别选用的写法）：
+
+```go
+flag.ConfigFile("config.toml").Name("config")  // 仅 -config，不再提供 -c
+flag.ConfigFile("config.toml").Alias("config") // 同时接受 -c 和 -config
+
+fs := flag.NewFlagSet("app", flag.ContinueOnError)
+fs.ConfigFile("config.toml").Alias("config") // 仅作用于此 FlagSet
+```
+
 要点：
 
-- `-c` 是自动注册的隐藏参数，无需手动定义；未指定时跳过文件解析
-- 可通过 `fs.SetConfigFlagName("conf")` 自定义参数名（FlagSet 级别，互不影响，默认 `"c"`）
+- `-c` 是自动注册的隐藏参数，无需手动定义；未设置 `ConfigFile` 且未传路径时跳过文件解析
+- 旧接口 `fs.SetConfigFlagName("conf")` 仍可自定义参数名（FlagSet 级别，互不影响，默认 `"c"`）；若也调用 `.Name(...)`，解析前最后一次命名生效
 - 配置文件按 `ConfigTitle.ConfigKey`（即 `IntConfigVar` 第二、三个参数）的节/键读取
 - 可通过 `flag.DefaultConfigFlagName` 修改默认标志名（默认 `"c"`）
 - 解析完成后用 `flag.GetConfig()` 获取 `*Config`，支持读写回文件
