@@ -17,6 +17,7 @@ type FlagSet struct {
 	parsed        bool   // 是否解析
 	actual        map[string]*Flag
 	formal        map[string]*Flag
+	pending       []*FlagBuilder
 	flagAliases   map[string]string
 	cmdAliases    map[string]string
 	args          []string // 参数
@@ -281,6 +282,7 @@ func (f *FlagSet) SetConfigFlagName(name string) {
 }
 
 // Parse 解析 FlagSet 参数，允许选项位于位置参数前后；顶层 ArgsFlag 和 Run 保持在子命令前停止解析。
+// FlagSet 会保留已设置的值；需要在新的环境变量或配置来源下独立解析时，应新建 FlagSet。
 func (f *FlagSet) Parse(arguments []string) error {
 	return f.parse(arguments, true)
 }
@@ -292,10 +294,36 @@ func (f *FlagSet) ParseStandard(arguments []string) error {
 
 // parse 按 interspersed 决定是否跨越位置参数继续解析选项，供顶层子命令入口保留标准停止语义。
 func (f *FlagSet) parse(arguments []string, interspersed bool) error {
+	for _, builder := range f.pending {
+		if err := builder.registerPending(); err != nil {
+			switch f.errorHandling {
+			case ContinueOnError:
+				return err
+			case ExitOnError:
+				os.Exit(2)
+			case PanicOnError:
+				panic(err)
+			}
+			return err
+		}
+	}
+
 	// 取当前 FlagSet 使用的配置文件参数名
 	configFlagName := f.ConfigFlagName()
 	// 如果没有定义配置文件参数名，则添加一个隐藏的参数
 	if _, ok := f.formal[configFlagName]; !ok {
+		if f.Lookup(configFlagName) != nil {
+			err := f.failf("配置文件参数名 -%s 已被参数别名占用", configFlagName)
+			switch f.errorHandling {
+			case ContinueOnError:
+				return err
+			case ExitOnError:
+				os.Exit(2)
+			case PanicOnError:
+				panic(err)
+			}
+			return err
+		}
 		f.StringHidden(configFlagName, "", "默认读取的配置文件 如果参数没有值则会读取配置文件中的值")
 	}
 
@@ -340,6 +368,19 @@ func (f *FlagSet) parse(arguments []string, interspersed bool) error {
 		f.args = positionals
 	}
 
+	// Explicit command-line values win over bound environment variables.
+	if err := f.parseEnv(); err != nil {
+		switch f.errorHandling {
+		case ContinueOnError:
+			return err
+		case ExitOnError:
+			os.Exit(2)
+		case PanicOnError:
+			panic(err)
+		}
+		return err
+	}
+
 	// 读取配置文件
 	var cFile string
 	// 如果定义了配置文件参数名，则读取其值
@@ -371,8 +412,6 @@ func (f *FlagSet) parse(arguments []string, interspersed bool) error {
 		}
 	}
 
-	// 应用到环境变量
-	f.parseEnv()
 	return nil
 }
 
@@ -398,10 +437,16 @@ func (f *FlagSet) ParseFile(config string, rewritevalue bool) error {
 		if title == "" && key == "" {
 			continue
 		}
-		value := fconfig.ReadConfigToString(title, key)
-		if value == "" {
+		configKey := title
+		if title == "" {
+			configKey = key
+		} else if key != "" {
+			configKey += "." + key
+		}
+		if !fconfig.IsSet(configKey) {
 			continue
 		}
+		value := fconfig.ReadConfigToString(title, key)
 
 		if err := flag.Value.Set(value); err != nil {
 			return f.failf("无效的值 %q 配置文件参数 %s 错误: %v", value, name, err)
@@ -545,7 +590,8 @@ func (f *FlagSet) FullHiddenVar(value Value, name string, title, key string, env
 func (f *FlagSet) VarFlag(value Value, name string, title, key string, env string, hidden bool, usage string) {
 	flag := &Flag{Name: name, Usage: usage, Value: value, DefValue: value.String(), ConfigTitle: title, ConfigKey: key, EnvName: env, Hidden: hidden}
 	_, alreadythere := f.formal[name]
-	if alreadythere {
+	_, aliasExists := f.flagAliases[name]
+	if alreadythere || aliasExists {
 		var msg string
 		if f.name == "" {
 			msg = fmt.Sprintf("flag重复定义: %s", name)
@@ -594,13 +640,25 @@ func (f *FlagSet) HiddenVar(value Value, name string, usage string) {
 	f.FullHiddenVar(value, name, "", "", "", usage)
 }
 
-// 应用到环境变量
-func (f *FlagSet) parseEnv() {
-	for _, f2 := range f.formal {
-		if f2 != nil && f2.EnvName != "" {
-			os.Setenv(f2.EnvName, f2.Value.String())
+// 读取已绑定的环境变量；命令行显式设置的参数保持优先。
+func (f *FlagSet) parseEnv() error {
+	for _, flag := range sortFlags(f.formal) {
+		if flag.EnvName == "" || f.actual[flag.Name] != nil {
+			continue
 		}
+		value, ok := os.LookupEnv(flag.EnvName)
+		if !ok {
+			continue
+		}
+		if err := flag.Value.Set(value); err != nil {
+			return f.failf("无效的值 %q 环境变量 %s 参数: -%s: %v", value, flag.EnvName, flag.Name, err)
+		}
+		if f.actual == nil {
+			f.actual = make(map[string]*Flag)
+		}
+		f.actual[flag.Name] = flag
 	}
+	return nil
 }
 
 // 返回参数

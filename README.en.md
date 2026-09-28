@@ -79,6 +79,42 @@ The package level provides `XxxVar` / `Xxx` functions consistent with the standa
 
 > All types (Bool / String / Int / Int64 / Uint / Uint64 / Float64 / Duration, plus the slice variants Strings/Ints/...) follow the same naming convention.
 
+#### Fluent definitions
+
+`flag.New` (or `fs.New`) chains aliases, defaults, config keys, environment variables, and help text. A terminal type method registers the flag immediately and returns a pointer; `Parse` updates that pointer with the resolved value:
+
+```go
+follow := flag.New("follow").Alias("f").Default(false).Config("title.key").Env("FOLLOW").Bool()
+if err := flag.Parse(); err != nil { panic(err) }
+fmt.Println(*follow) // resolved from -follow/-f, FOLLOW, the config file, or the default
+```
+
+`.Config("title.key")` maps to the `[title]` section and `key` in the config file. Pass `-c config.toml` to read the file, or use `fs.SetConfigFlagName("conf")` to select `-conf`. Environment variables are **inputs**, not destinations: parsing does not write them. Priority is **CLI > environment > config file > default**.
+
+Use `.Var(&data)` to bind an existing variable; it registers the flag immediately and does not return a pointer:
+
+```go
+var data bool
+flag.New("enabled").Default(false).Var(&data)
+if err := flag.Parse(); err != nil { panic(err) }
+fmt.Println(data)
+```
+
+You can also keep a definition without calling a terminal type method or `.Var`, then read it after parsing:
+
+```go
+fs := flag.NewFlagSet("app", flag.ContinueOnError)
+definition := fs.New("follow").Default(false).Env("FOLLOW")
+count := fs.New("count").Default("3") // no terminal type method: default is stored as text
+if err := fs.Parse([]string{"-follow", "-count=5"}); err != nil { panic(err) }
+fmt.Println(definition.Value().Bool()) // true (a bool value, not *bool)
+fmt.Println(count.Value().Int(), count.Value().String()) // 5 5
+```
+
+`Parse` registers non-terminal definitions with string-backed storage. `.Value().Bool()/Int()/Int64()/String()` and the other accessors convert on read; numeric and boolean accessors **panic** if the text cannot be converted, while `.Value().String()` returns the text unchanged. Terminal `.Bool()/Int()/Int64()/String()` and the other type methods instead return typed pointers (`*bool`, `*int`, `*int64`, `*string`, etc.).
+
+`FlagSet` retains parsed flag state. Create a new `FlagSet` to parse independently with a different environment or configuration.
+
 ### 2. Slice types
 
 Slice types parse comma-separated values and **accumulate across repeated flags** (consistent with `pflag`'s `StringSlice`):
@@ -139,7 +175,7 @@ var (
 )
 
 func init() {
-    flag.StringVar(&Host, "host", "127.0.0.1", "listen address")
+    flag.StringEnvVar(&Host, "host", "APP_HOST", "127.0.0.1", "listen address")
     flag.IntConfigVar(&Port, "port", "server", "port", 8080, "service port")
     flag.Parse()
 }
@@ -182,6 +218,8 @@ Notes:
 flag.String("verbose", "false", "verbose output")
 flag.Alias("verbose", "v")     // -v is equivalent to --verbose
 ```
+
+Fluent definitions can use `.Alias("v")`; with `flag.Var`, `FlagVar.Aliases` is another option, for example `flag.Var(&flag.FlagVar{Value: &verbose, Name: "verbose", Aliases: []string{"v"}})`.
 
 ### 7. Hidden flags
 

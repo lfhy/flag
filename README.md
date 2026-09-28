@@ -79,6 +79,42 @@ Port=9000 Host=127.0.0.1 Tags=[a b c] Debug=false
 
 > 所有类型（Bool / String / Int / Int64 / Uint / Uint64 / Float64 / Duration 以及对应的切片 Strings/Ints/... ）均遵循同一套命名规则。
 
+#### 链式定义（Fluent API）
+
+`flag.New`（或 `fs.New`）可链式设置别名、默认值、配置键、环境变量和帮助文字。以类型方法结尾会立即注册参数并返回指针；`Parse` 会把最终值写入该指针：
+
+```go
+follow := flag.New("follow").Alias("f").Default(false).Config("title.key").Env("FOLLOW").Bool()
+if err := flag.Parse(); err != nil { panic(err) }
+fmt.Println(*follow) // 根据 -follow/-f、FOLLOW、配置文件或默认值确定
+```
+
+`.Config("title.key")` 映射配置文件的 `[title]` 节和 `key` 键；要读取文件，在命令行传 `-c config.toml`（或通过 `fs.SetConfigFlagName("conf")` 改用 `-conf`）。环境变量是**输入来源**，解析不会将值写回环境变量。优先级为 **命令行 > 环境变量 > 配置文件 > 默认值**。
+
+已有变量可用 `.Var(&data)` 绑定；它会立即注册参数，不返回指针：
+
+```go
+var data bool
+flag.New("enabled").Default(false).Var(&data)
+if err := flag.Parse(); err != nil { panic(err) }
+fmt.Println(data)
+```
+
+也可以不调用类型方法或 `.Var`，直接保留定义并在解析后读取：
+
+```go
+fs := flag.NewFlagSet("app", flag.ContinueOnError)
+definition := fs.New("follow").Default(false).Env("FOLLOW")
+count := fs.New("count").Default("3") // 未以类型方法结尾：默认值保留为文本
+if err := fs.Parse([]string{"-follow", "-count=5"}); err != nil { panic(err) }
+fmt.Println(definition.Value().Bool()) // true（值类型为 bool，不是 *bool）
+fmt.Println(count.Value().Int(), count.Value().String()) // 5 5
+```
+
+无类型结尾的定义由 `Parse` 注册为文本值，`.Value().Bool()/Int()/Int64()/String()` 等方法在读取时转换；文本不能转换时，布尔值与数值读取方法会 **panic**，而 `.Value().String()` 原样返回文本。类型结尾的 `.Bool()/Int()/Int64()/String()` 等方法则返回对应类型的指针（`*bool`、`*int`、`*int64`、`*string` 等）。
+
+`FlagSet` 会保留已解析的参数状态；如果要用另一组环境变量或配置独立解析，请新建 `FlagSet`。
+
 ### 2. 切片类型
 
 切片类型支持逗号分隔解析，**多次传参会累加**（与 `pflag` 的 `StringSlice` 行为一致）：
@@ -139,7 +175,7 @@ var (
 )
 
 func init() {
-    flag.StringVar(&Host, "host", "127.0.0.1", "监听地址")
+    flag.StringEnvVar(&Host, "host", "APP_HOST", "127.0.0.1", "监听地址")
     flag.IntConfigVar(&Port, "port", "server", "port", 8080, "服务端口")
     flag.Parse()
 }
@@ -182,6 +218,8 @@ $ APP_HOST=0.0.0.0 go run app.go -c config.toml
 flag.String("verbose", "false", "详细输出")
 flag.Alias("verbose", "v")     // -v 等价于 --verbose
 ```
+
+链式定义可用 `.Alias("v")`；使用 `flag.Var` 时也可设置 `FlagVar.Aliases`，例如 `flag.Var(&flag.FlagVar{Value: &verbose, Name: "verbose", Aliases: []string{"v"}})`。
 
 ### 7. 隐藏参数
 

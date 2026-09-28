@@ -10,10 +10,12 @@ import (
 
 // FlagVar 定义一个支持多来源设置的标志变量
 type FlagVar struct {
-	// Value 存储实际值的指针，确保可以通过反射修改其内容
+	// Value 是用于反射绑定的变量指针，也可以是实现 Value 接口的值
 	Value interface{}
 	// Name 是用于命令行参数解析的名字，例如 "--port"
 	Name string
+	// Aliases 是同一命令行参数的其它名字
+	Aliases []string
 	// Env 是对应的环境变量名，例如 "APP_PORT"
 	Env string
 	// ConfigSection 表示在配置文件中的节标题，例如 "[server]"
@@ -173,12 +175,36 @@ func (f *FlagSet) Var(opt *FlagVar) {
 	if opt.ConfigKey == "" && opt.ConfigSection != "" {
 		opt.ConfigKey = opt.Name
 	}
-	value, err := newReflectValue(opt.Value, opt.DefaultValue)
-	if err != nil {
-		f.handleError(err)
-		return
+	// Check all aliases before adding the flag, so a rejected alias cannot
+	// leave a partially registered flag when errors are non-fatal.
+	seen := make(map[string]bool, len(opt.Aliases))
+	for _, alias := range opt.Aliases {
+		if alias == "" {
+			f.handleError(fmt.Errorf("参数别名不能为空"))
+			return
+		}
+		if alias == opt.Name {
+			continue
+		}
+		if seen[alias] || f.Lookup(alias) != nil {
+			f.handleError(fmt.Errorf("参数别名重复定义: %s", alias))
+			return
+		}
+		seen[alias] = true
+	}
+	value, ok := opt.Value.(Value)
+	if !ok {
+		var err error
+		value, err = newReflectValue(opt.Value, opt.DefaultValue)
+		if err != nil {
+			f.handleError(err)
+			return
+		}
 	}
 	f.VarFlag(value, opt.Name, opt.ConfigSection, opt.ConfigKey, opt.Env, opt.Hidden, opt.Usage)
+	for _, alias := range opt.Aliases {
+		f.Alias(opt.Name, alias)
+	}
 }
 
 func (f *FlagSet) handleError(err error) {
