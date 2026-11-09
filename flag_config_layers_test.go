@@ -150,3 +150,18 @@ func TestConfigFilesCopiesPathsAndSupportsEarlyGetConfig(t *testing.T) {
 		t.Fatalf("Parse after GetConfig: port=%d err=%v", *port, err)
 	}
 }
+
+func TestConfigFilesHigherLayerReplacesDifferentValueKinds(t *testing.T) {
+	directory := t.TempDir()
+	a := layerFixture(t, directory, "a.toml", "options={old=true}\nreverse='old'\narray={old=true}\n")
+	b := layerFixture(t, directory, "b.toml", "options='new'\nreverse={new=true}\narray=['new']\n")
+	fs := flag.NewFlagSet("kind changes", flag.ContinueOnError)
+	fs.ConfigFiles(a, b)
+	if err := fs.Parse(nil); err != nil {
+		t.Fatal(err)
+	}
+	cfg := fs.GetConfig()
+	if cfg.GetString("options") != "new" || cfg.IsSet("options.old") || !cfg.GetBool("reverse.new") || !reflect.DeepEqual(cfg.GetStringSlice("array"), []string{"new"}) {
+		t.Fatalf("higher file lost priority on type change: %v", cfg.AllSettings())
+	}
+}

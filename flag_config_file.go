@@ -87,6 +87,7 @@ func (b *ConfigFileBuilder) readMerged() (*Config, error) {
 		}
 	}
 	merged := newReadOnlyConfig("")
+	settings := make(map[string]interface{})
 	for _, source := range sources {
 		if _, err := os.Stat(source.path); err != nil {
 			if os.IsNotExist(err) && !source.required {
@@ -98,13 +99,29 @@ func (b *ConfigFileBuilder) readMerged() (*Config, error) {
 		if err := layer.ReadInConfig(); err != nil {
 			return nil, fmt.Errorf("无法读取配置文件 %q: %w", source.path, err)
 		}
-		if err := merged.MergeConfigMap(layer.AllSettings()); err != nil {
-			return nil, fmt.Errorf("无法合并配置文件 %q: %w", source.path, err)
-		}
+		mergeConfigLayers(settings, layer.AllSettings())
 		merged.path = source.path
 		merged.SetConfigFile(source.path)
 	}
+	if err := merged.MergeConfigMap(settings); err != nil {
+		return nil, fmt.Errorf("无法合并配置文件: %w", err)
+	}
 	return &merged, nil
+}
+
+// Merge only two tables recursively. A higher-priority scalar or array must
+// replace an earlier table too; Viper's incremental MergeConfigMap otherwise
+// logs that type change and silently retains the lower-priority table.
+func mergeConfigLayers(target, overlay map[string]interface{}) {
+	for key, value := range overlay {
+		next, nextIsMap := value.(map[string]interface{})
+		previous, previousIsMap := target[key].(map[string]interface{})
+		if nextIsMap && previousIsMap {
+			mergeConfigLayers(previous, next)
+		} else {
+			target[key] = value
+		}
+	}
 }
 
 // Native config arrays replace defaults as well as lower file layers. Keep
