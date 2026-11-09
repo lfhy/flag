@@ -212,6 +212,40 @@ fs.ConfigFile("config.toml").Alias("config") // accept -c and -config
 
 `fs.SetConfigFlagName("conf")` can still rename the flag before parsing; if used with `.Name(...)`, the last setting wins. Define config keys via `FlagVar.ConfigSection` / `ConfigKey` or fluent `.Config("server.port")`. After parsing, `fs.GetConfig()` provides the current configuration for optional writes; the example above does not write anything.
 
+#### Layer multiple configuration files
+
+Use `ConfigFiles` for shared service settings and per-instance overrides without a separate TOML loader:
+
+~~~go
+package main
+
+import (
+    "fmt"
+    "os"
+
+    "github.com/lfhy/flag"
+)
+
+func main() {
+    fs := flag.NewFlagSet("gateway", flag.ContinueOnError)
+    fs.ConfigFiles("config.toml", "gateway.toml", "gateway-7420.toml").
+        Name("config").Alias("c")
+    port := fs.IntConfig("port", "gateway", "port", 7420, "listen port")
+    peers := fs.StringsConfig("peers", "gateway", "peers", "", "comma-separated gateways")
+    if err := fs.Parse(os.Args[1:]); err != nil {
+        fmt.Fprintln(os.Stderr, err)
+        os.Exit(2)
+    }
+    fmt.Printf("Port=%d Peers=%v\n", *port, *peers)
+}
+~~~
+
+Files merge from lowest to highest priority in argument order: **CLI > environment > explicit `-c` file > last default file > earlier default files > flag defaults**. For example, `-c override.toml` adds the highest file layer while retaining absent keys from shared settings. `ConfigFile` keeps its existing behavior, where explicit `-c` replaces the default file. Calling `ConfigFiles` again replaces the entire default path list.
+
+Missing default files are skipped. Existing but unreadable or malformed defaults, and missing or malformed explicitly selected files, return errors. `-c=` disables all file loading. Nested tables merge by key, while arrays replace rather than concatenate: an instance's `peers = []` clears the shared list. `StringsConfig` accepts native TOML string arrays and preserves commas within elements. Repeated CLI slice arguments retain their existing accumulation behavior.
+
+`fs.GetConfig()` contains every merged file key, including keys without a bound flag. `GetConfigPath()` identifies the last file actually read. It retains file values rather than writing CLI/environment overrides back. Writing the merged configuration also writes inherited keys to that target; select the fields yourself when saving only a small instance override.
+
 ### 6. Aliases
 
 ```go

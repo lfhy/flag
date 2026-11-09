@@ -2,7 +2,9 @@ package flag
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -13,6 +15,8 @@ import (
 type ConfigFileBuilder struct {
 	set         *FlagSet
 	path        string
+	paths       []string
+	layered     bool
 	aliases     []string
 	invalidName bool
 }
@@ -23,6 +27,13 @@ func ConfigFile(path string) *ConfigFileBuilder {
 	return GetDefaultFlagSet().ConfigFile(path)
 }
 
+// ConfigFiles loads optional default files in order, from lowest to highest
+// priority. An explicit -c file adds the highest file layer; -c= disables all
+// files. Command-line and environment values still override every file.
+func ConfigFiles(paths ...string) *ConfigFileBuilder {
+	return GetDefaultFlagSet().ConfigFiles(paths...)
+}
+
 // ConfigFile opts this FlagSet into loading path when no command-line config
 // path is supplied. Repeated calls update the default path on this FlagSet.
 func (f *FlagSet) ConfigFile(path string) *ConfigFileBuilder {
@@ -30,8 +41,118 @@ func (f *FlagSet) ConfigFile(path string) *ConfigFileBuilder {
 		f.configFile = &ConfigFileBuilder{set: f}
 	}
 	f.configFile.path = path
+	f.configFile.paths = nil
+	f.configFile.layered = false
 	f.config = nil
 	return f.configFile
+}
+
+// ConfigFiles configures multiple optional default files. Later files override
+// earlier values, nested tables merge, and arrays replace rather than append.
+// Unlike ConfigFile, an explicit -c is an additional highest-priority layer.
+func (f *FlagSet) ConfigFiles(paths ...string) *ConfigFileBuilder {
+	if f.configFile == nil {
+		f.configFile = &ConfigFileBuilder{set: f}
+	}
+	f.configFile.paths = append([]string(nil), paths...)
+	f.configFile.layered = true
+	f.configFile.path = ""
+	for _, path := range paths {
+		if path != "" {
+			f.configFile.path = path
+		}
+	}
+	f.config = nil
+	return f.configFile
+}
+
+type configFileSource struct {
+	path     string
+	required bool
+}
+
+func (b *ConfigFileBuilder) readMerged() (*Config, error) {
+	sources := make([]configFileSource, 0, len(b.paths)+1)
+	for _, path := range b.paths {
+		if path != "" {
+			sources = append(sources, configFileSource{path: path})
+		}
+	}
+	canonical := b.set.ConfigFlagName()
+	if flag := b.set.formal[canonical]; flag != nil && b.set.actual[canonical] != nil {
+		if path := flag.Value.String(); path != "" {
+			sources = append(sources, configFileSource{path: path, required: true})
+		} else {
+			sources = nil
+		}
+	}
+	merged := newReadOnlyConfig("")
+	for _, source := range sources {
+		if _, err := os.Stat(source.path); err != nil {
+			if os.IsNotExist(err) && !source.required {
+				continue
+			}
+			return nil, fmt.Errorf("无法读取配置文件 %q: %w", source.path, err)
+		}
+		layer := newReadOnlyConfig(source.path)
+		if err := layer.ReadInConfig(); err != nil {
+			return nil, fmt.Errorf("无法读取配置文件 %q: %w", source.path, err)
+		}
+		if err := merged.MergeConfigMap(layer.AllSettings()); err != nil {
+			return nil, fmt.Errorf("无法合并配置文件 %q: %w", source.path, err)
+		}
+		merged.path = source.path
+		merged.SetConfigFile(source.path)
+	}
+	return &merged, nil
+}
+
+// Native config arrays replace defaults as well as lower file layers. Keep
+// comma-containing string elements intact instead of round-tripping via CSV.
+func setLayeredConfigValue(value Value, raw interface{}, text string) error {
+	var target reflect.Value
+	switch value := value.(type) {
+	case *StringSlice:
+		target = reflect.ValueOf(value).Elem()
+	case *IntSlice:
+		target = reflect.ValueOf(value).Elem()
+	case *int64sValue:
+		target = reflect.ValueOf(value.value).Elem()
+	case *uintsValue:
+		target = reflect.ValueOf(value.value).Elem()
+	case *uint64sValue:
+		target = reflect.ValueOf(value.value).Elem()
+	case *reflectSliceValue:
+		target = value.elem
+	default:
+		return value.Set(text)
+	}
+	parse, err := sliceElemParser(target.Type().Elem())
+	if err != nil {
+		return err
+	}
+	slice := reflect.MakeSlice(target.Type(), 0, 0)
+	source := reflect.ValueOf(raw)
+	var parts []string
+	if source.IsValid() && (source.Kind() == reflect.Slice || source.Kind() == reflect.Array) {
+		for i := 0; i < source.Len(); i++ {
+			parts = append(parts, fmt.Sprint(source.Index(i).Interface()))
+		}
+	} else {
+		parts = splitStrings(text)
+	}
+	for _, part := range parts {
+		element, err := parse(part)
+		if err != nil {
+			return err
+		}
+		if !element.Type().AssignableTo(target.Type().Elem()) {
+			element = element.Convert(target.Type().Elem())
+		}
+		slice = reflect.Append(slice, element)
+	}
+	target.Set(slice)
+	return nil
 }
 
 // Name changes the canonical config-path flag name ("c" by default).

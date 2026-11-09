@@ -7,6 +7,7 @@
 - `flag_set.go` 拥有 `FlagSet`、参数注册/解析、来源优先级和配置路径参数；`flag_args.go` 是默认参数集的包级入口。
 - `flag_var.go` 定义通用 `FlagVar` 绑定及注册时错误处理；`flag_reflect_value.go` 负责反射值与切片的支持边界；`flag_builder.go` 提供 `New` 链式定义和读取。
 - `flag_config_file.go` 定义显式 `ConfigFile` 及文件读取装配；`flag_config.go` 提供配置读写；`flag_cmd.go` 拥有 `Cmd`、命令注册和分发。`flag_bool.go` 等按类型命名的文件保留 `XxxVar` 兼容 API，`flag_value.go` 等实现类型值。
+- `ConfigFiles` 从低到高合并多个可选默认文件，显式 `-c` 追加最高文件层；`ConfigFile` 保持单文件替换语义。CLI/环境仍优先，嵌套表合并、数组整体覆盖，GetConfig 保留未绑定键。严格读错和不创建缺失文件必须回归。
 - 根目录 `*_test.go` 验证解析/来源/链式定义/子命令等行为；`example/` 含使用示例。变动前先读对应实现与测试，不以 README 代替真实 API。
 
 ## 安装与验证

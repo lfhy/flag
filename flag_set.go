@@ -34,6 +34,15 @@ func (f *FlagSet) GetConfig() *Config {
 	// 避免无初始化
 	if f.config == nil {
 		if f.configFile != nil {
+			if f.configFile.layered {
+				if config, err := f.configFile.readMerged(); err == nil {
+					f.config = config
+				} else {
+					config := newReadOnlyConfig("")
+					f.config = &config
+				}
+				return f.config
+			}
 			path := f.configFile.path
 			if flag := f.formal[f.ConfigFlagName()]; flag != nil && f.actual[flag.Name] != nil {
 				path = flag.Value.String()
@@ -419,6 +428,23 @@ func (f *FlagSet) parse(arguments []string, interspersed bool) error {
 		return err
 	}
 
+	if f.configFile != nil && f.configFile.layered {
+		config, err := f.configFile.readMerged()
+		if err == nil {
+			f.config = config
+			err = f.applyConfigValues(config, false, true)
+		}
+		if err != nil {
+			switch f.errorHandling {
+			case ExitOnError:
+				os.Exit(2)
+			case PanicOnError:
+				panic(err)
+			}
+		}
+		return err
+	}
+
 	// 读取配置文件
 	var cFile string
 	// 如果定义了配置文件参数名，则读取其值
@@ -479,6 +505,10 @@ func (f *FlagSet) ParseFile(config string, rewritevalue bool) error {
 		fconfig = newConfig(config)
 	}
 	f.config = &fconfig
+	return f.applyConfigValues(&fconfig, rewritevalue, false)
+}
+
+func (f *FlagSet) applyConfigValues(fconfig *Config, rewritevalue, layered bool) error {
 	for name, flag := range f.formal {
 		//忽略已设置的参数；参数优先于文件
 		if f.actual[name] != nil && !rewritevalue {
@@ -506,7 +536,13 @@ func (f *FlagSet) ParseFile(config string, rewritevalue bool) error {
 		}
 		value := fconfig.ReadConfigToString(title, key)
 
-		if err := flag.Value.Set(value); err != nil {
+		var err error
+		if layered {
+			err = setLayeredConfigValue(flag.Value, fconfig.Get(configKey), value)
+		} else {
+			err = flag.Value.Set(value)
+		}
+		if err != nil {
 			return f.failf("无效的值 %q 配置文件参数 %s 错误: %v", value, name, err)
 		}
 

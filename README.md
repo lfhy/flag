@@ -212,6 +212,40 @@ fs.ConfigFile("config.toml").Alias("config") // 接受 -c 和 -config
 
 `fs.SetConfigFlagName("conf")` 仍可在解析前改名；与 `.Name(...)` 同时使用时以最后一次设置为准。配置键由 `FlagVar.ConfigSection` / `ConfigKey` 或链式 `.Config("server.port")` 指定。解析后 `fs.GetConfig()` 可取得当前配置并写回；本节配置示例不执行回写。
 
+#### 多个配置文件按层合并
+
+服务公共配置与实例配置可用 `ConfigFiles` 统一加载，不需要自行读写 TOML：
+
+~~~go
+package main
+
+import (
+    "fmt"
+    "os"
+
+    "github.com/lfhy/flag"
+)
+
+func main() {
+    fs := flag.NewFlagSet("gateway", flag.ContinueOnError)
+    fs.ConfigFiles("config.toml", "gateway.toml", "gateway-7420.toml").
+        Name("config").Alias("c")
+    port := fs.IntConfig("port", "gateway", "port", 7420, "监听端口")
+    peers := fs.StringsConfig("peers", "gateway", "peers", "", "逗号分隔网关地址")
+    if err := fs.Parse(os.Args[1:]); err != nil {
+        fmt.Fprintln(os.Stderr, err)
+        os.Exit(2)
+    }
+    fmt.Printf("Port=%d Peers=%v\n", *port, *peers)
+}
+~~~
+
+文件按参数顺序从低到高合并，优先级为 **命令行 > 环境变量 > 显式 `-c` 文件 > 最后一个默认文件 > 前面的默认文件 > 参数默认值**。例如 `-c override.toml` 为上例追加最高配置层，未出现的键仍继承公共文件。`ConfigFile` 保持原有“显式 `-c` 替换默认文件”的行为；再次调用 `ConfigFiles` 则替换整组默认路径。
+
+缺少的默认文件会跳过，已存在但不可读或损坏的默认文件、缺少或损坏的显式 `-c` 文件均返回错误。`-c=` 禁用全部文件读取。嵌套表按键合并，数组整体替换而不拼接；例如实例中的 `peers = []` 清除公共列表，`StringsConfig` 可直接读取原生 TOML 字符串数组，元素中的逗号保持原样。重复 CLI 切片参数仍按现有规则累加。
+
+`fs.GetConfig()` 包含所有文件合并后的键值（包括没有绑定 flag 的键），`GetConfigPath()` 指向最后一个实际读取的文件。它保存文件来源的值，不把 CLI/环境覆盖值写回配置；写入合并配置会将继承的键一起写入该目标，按实例保存少量键时应自行选择写入内容。
+
 ### 6. 别名
 
 ```go
