@@ -10,13 +10,13 @@
 ## ✨ 特性
 
 - **多来源优先级**：命令行参数 > 环境变量 > 配置文件 > 默认值
-- **🌟 统一配置入口 `-c`**：`Parse()` 自动注册隐藏参数 `-c`，传入配置文件后命令行/环境变量/配置文件按优先级一次性合并，无需手动调用 viper
+- **🌟 统一配置入口 `-c`**：`Parse()` 自动注册隐藏参数 `-c`；建议先用 `ConfigFile` 启用默认路径和严格文件读错，再按命令行/环境变量/配置文件优先级合并
 - **配置文件集成**：基于 [viper](https://github.com/spf13/viper)，支持 JSON / TOML / YAML 等格式，参数变更可回写配置
 - **隐藏参数**：支持注册不在 `--help` 中显示的参数，但仍可被解析
 - **子命令 & 别名**：支持注册子命令（如 `git` 风格），并为参数/子命令设置别名（如 `-v` ↔ `--verbose`）
 - **位置参数与选项可交错**：`FlagSet.Parse` 支持选项写在位置参数前后；布尔选项不会吞掉路径，`--` 后内容始终按字面位置参数保留。顶层子命令分发可使用 `ParseStandard` 在首个位置参数处停止
 - **切片类型**：内置 `Strings / Ints / Int64s / Uints / Uint64s` 等切片类型，逗号分隔解析、多次传参自动累加
-- **反射通用入口 `Var()`**：一个 API 覆盖所有基础类型和切片类型
+- **反射通用入口 `Var()`**：一个 API 覆盖受支持的基础类型及字符串/整数切片
 - **彩色帮助输出**：内置 ANSI 彩色打印，`PrintAll` 以表格形式列出全部参数
 
 ## 📦 安装
@@ -32,26 +32,25 @@ package main
 
 import (
     "fmt"
+    "os"
+
     "github.com/lfhy/flag"
 )
 
-var (
-    Port    int
-    Host    string
-    Tags    []string
-    Debug   bool
-)
-
-func init() {
-    flag.IntVar(&Port, "port", 8080, "服务端口")
-    flag.StringVar(&Host, "host", "127.0.0.1", "监听地址")
-    flag.StringsVar(&Tags, "tags", "go,linux", "标签（逗号分隔）")
-    flag.BoolVar(&Debug, "debug", false, "调试模式")
-    flag.Parse()
-}
-
 func main() {
-    fmt.Printf("Port=%d Host=%s Tags=%v Debug=%v\n", Port, Host, Tags, Debug)
+    fs := flag.NewFlagSet("app", flag.ContinueOnError)
+    var port int
+    var tags []string
+    fs.Var(&flag.FlagVar{Value: &port, Name: "port", DefaultValue: 8080, Usage: "服务端口"})
+    fs.Var(&flag.FlagVar{Value: &tags, Name: "tags", Usage: "标签，可重复"})
+    host := fs.New("host").Default("127.0.0.1").Usage("监听地址").String()
+    debug := fs.New("debug").Default(false).Usage("调试模式").Bool()
+
+    if err := fs.Parse(os.Args[1:]); err != nil {
+        fmt.Fprintln(os.Stderr, err)
+        os.Exit(2)
+    }
+    fmt.Printf("Port=%d Host=%s Tags=%v Debug=%v\n", port, *host, tags, *debug)
 }
 ```
 
@@ -64,29 +63,20 @@ Port=9000 Host=127.0.0.1 Tags=[a b c] Debug=false
 
 ## 📚 使用指南
 
-### 1. 参数定义方式
+### 1. 推荐的参数定义方式
 
-包级别提供了与标准库一致风格的 `XxxVar` / `Xxx` 函数；也可通过 `FlagSet` 在子命令中独立使用。
-
-| 方式 | 说明 |
-|---|---|
-| `flag.IntVar(p, "n", 1, "...")` | 基础类型，仅命令行 + 默认值 |
-| `flag.IntEnvVar(p, "n", "APP_N", 1, "...")` | 同时绑定环境变量 |
-| `flag.IntConfigVar(p, "n", "server", "port", 1, "...")` | 同时绑定配置文件 |
-| `flag.IntFullVar(p, "n", "server", "port", "APP_N", 1, "...")` | 全部来源 |
-| `flag.Int("n", 1, "...")` | 返回 `*int`，无需预先定义变量 |
-| 函数名加 `Hidden`（如 `IntHiddenVar`） | 注册为隐藏参数 |
-
-> 所有类型（Bool / String / Int / Int64 / Uint / Uint64 / Float64 / Duration 以及对应的切片 Strings/Ints/... ）均遵循同一套命名规则。
+优先在独立 `FlagSet` 上用 `fs.Var(&flag.FlagVar{...})` 定义配置丰富的参数（名称、别名、默认值、环境变量、配置节/键、帮助与隐藏状态），或用 `fs.New(...).Default(...).Config(...).Env(...).Usage(...).Int()` 等链式写法；已有变量也可在链末 `.Var(&value)`。两者都在运行期注册并由 `fs.Parse(os.Args[1:])` 解析。包级 `flag.Var` / `flag.New` 使用默认 `FlagSet`，适合确实需要共享全局状态的程序。
 
 #### 链式定义（Fluent API）
 
 `flag.New`（或 `fs.New`）可链式设置别名、默认值、配置键、环境变量和帮助文字。以类型方法结尾会立即注册参数并返回指针；`Parse` 会把最终值写入该指针：
 
 ```go
-follow := flag.New("follow").Alias("f").Default(false).Config("title.key").Env("FOLLOW").Bool()
-if err := flag.Parse(); err != nil { panic(err) }
-fmt.Println(*follow) // 根据 -follow/-f、FOLLOW、配置文件或默认值确定
+fs := flag.NewFlagSet("app", flag.ContinueOnError)
+follow := fs.New("follow").Alias("f").Default(false).
+    Config("title.key").Env("APP_FOLLOW").Usage("跟随更新").Bool()
+if err := fs.Parse(os.Args[1:]); err != nil { fmt.Fprintln(os.Stderr, err); os.Exit(2) }
+fmt.Println(*follow) // 根据 -follow/-f、APP_FOLLOW、配置文件或默认值确定
 ```
 
 `.Config("title.key")` 映射配置文件的 `[title]` 节和 `key` 键；未设置 `ConfigFile` 时，要读取文件需在命令行传 `-c config.toml`（或通过 `fs.SetConfigFlagName("conf")` 改用 `-conf`）。环境变量是**输入来源**，解析不会将值写回环境变量。优先级为 **命令行 > 环境变量 > 配置文件 > 默认值**。
@@ -95,8 +85,8 @@ fmt.Println(*follow) // 根据 -follow/-f、FOLLOW、配置文件或默认值确
 
 ```go
 var data bool
-flag.New("enabled").Default(false).Var(&data)
-if err := flag.Parse(); err != nil { panic(err) }
+fs.New("enabled").Default(false).Var(&data)
+if err := fs.Parse(os.Args[1:]); err != nil { fmt.Fprintln(os.Stderr, err); os.Exit(2) }
 fmt.Println(data)
 ```
 
@@ -117,67 +107,78 @@ fmt.Println(count.Value().Int(), count.Value().String()) // 5 5
 
 ### 2. 切片类型
 
-切片类型支持逗号分隔解析，**多次传参会累加**（与 `pflag` 的 `StringSlice` 行为一致）：
+切片类型支持逗号分隔解析，**多次传参会累加**；非空默认切片也参与追加，因此需要显式值独占列表时请用空默认值：
 
 ```go
 var ids []int
-flag.IntsVar(&ids, "ids", "1,2,3", "ID 列表")
-// -ids=4,5 -ids=6  →  [1 2 3 4 5 6]
+fs := flag.NewFlagSet("app", flag.ContinueOnError)
+fs.Var(&flag.FlagVar{Value: &ids, Name: "ids", DefaultValue: []int{1, 2}, Usage: "ID 列表"})
+if err := fs.Parse([]string{"-ids=4,5", "-ids=6"}); err != nil { panic(err) }
+fmt.Println(ids) // [1 2 4 5 6]
 ```
 
-支持：`StringsVar` / `IntsVar` / `Int64sVar` / `UintsVar` / `Uint64sVar`。
+兼容接口 `StringsVar` / `IntsVar` / `Int64sVar` / `UintsVar` / `Uint64sVar` 的默认值参数是逗号分隔字符串，同样会追加；反射 `FlagVar` 只支持 `[]string`、`[]int*`、`[]uint*`，不支持任意切片。
 
 ### 3. 通用反射入口 Var()
 
-`Var()` 接收一个 `FlagVar` 结构体，通过反射自动识别基础类型和切片类型，无需为每种类型单独调用 API：
+`Var()` 接收一个 `FlagVar` 结构体，集中设置 `Value`、`Name`、`Aliases`、`DefaultValue`、`Env`、`ConfigSection`、`ConfigKey`、`Usage`、`Hidden`，通过反射绑定受支持的类型。优先传入非 nil 变量指针；相较多个 `XxxVar` 调用，更适合需要多来源和别名的定义：
 
 ```go
-var (
-    name string
-    age  int
-    tags []string
-    ids  []int64
-)
-
-flag.Var(&flag.FlagVar{Value: &name, Name: "name", Env: "APP_NAME", DefaultValue: "default"})
-flag.Var(&flag.FlagVar{Value: &age, Name: "age", DefaultValue: 18})
-flag.Var(&flag.FlagVar{Value: &tags, Name: "tags", DefaultValue: "a,b,c"})
-flag.Var(&flag.FlagVar{Value: &ids, Name: "ids", DefaultValue: []int64{1, 2}})
+fs := flag.NewFlagSet("app", flag.ContinueOnError)
+var port int
+var ids []int64
+fs.Var(&flag.FlagVar{
+    Value: &port, Name: "port", Aliases: []string{"p"}, DefaultValue: 8080,
+    ConfigSection: "server", ConfigKey: "port", Env: "APP_PORT", Usage: "服务端口",
+})
+fs.Var(&flag.FlagVar{Value: &ids, Name: "ids", DefaultValue: []int64{1, 2}})
+if err := fs.Parse(os.Args[1:]); err != nil { fmt.Fprintln(os.Stderr, err); os.Exit(2) }
 ```
 
-`Var()` 支持的类型：`bool / string / int* / uint* / float64 / time.Duration` 以及对应的切片。
+`Var()` 支持 `bool / string / int* / uint* / float32 / float64 / time.Duration` 以及字符串、有符号或无符号整数切片。若省略配置节/键，`FlagVar` 会隐式推导：普通名称对应 `config.<名称>`，带连字符名称可能产生意外键（例如 `server-port` 对应 `server.server-port`）；需要稳定映射时显式指定 `ConfigSection` 和 `ConfigKey`，或用链式 `.Config("server.port")`。`ContinueOnError` 下部分注册错误只在注册时输出，**不保证**随后由 `Parse` 返回；检查参数定义本身，勿把解析成功当作注册已成功的证明。
 
-### 4. 环境变量与配置文件（手动绑定）
+### 4. 环境变量与配置文件
+
+优先在同一 `FlagVar` 或链式定义上同时绑定环境变量、配置键和命令行选项，无需重复解析或单独读取配置：
 
 ```go
-// 绑定环境变量：未在命令行指定时从环境变量读取
-flag.StringEnvVar(&host, "host", "APP_HOST", "0.0.0.0", "监听地址")
-
-// 绑定配置文件：从 title.key 读取
-flag.IntConfigVar(&port, "port", "server", "port", 8080, "服务端口")
-
-// 读取/回写配置
-cfg := flag.GetConfig()
-cfg.WriteToConfig("server", "port", 9000)
+var host string
+fs.Var(&flag.FlagVar{
+    Value: &host, Name: "host", Env: "APP_HOST", DefaultValue: "127.0.0.1",
+    ConfigSection: "server", ConfigKey: "host", Usage: "监听地址",
+})
+// 如果需要更新文件，解析后可通过 fs.GetConfig().WriteToConfig("server", "host", host) 回写
 ```
 
-优先级：**命令行 > 环境变量 > 配置文件 > 默认值**。
+优先级：**命令行 > 环境变量 > 配置文件 > 默认值**。`XxxVar` / `XxxEnvVar` / `XxxConfigVar` / `XxxFullVar` 以及返回指针的对应 `Xxx` 系列仍供兼容调用；例如 `fs.IntFullVar(&port, "port", "server", "port", "APP_PORT", 8080, "服务端口")`，最后三个来源配置按节、键、环境变量依次绑定，随后才是默认值和帮助文本。
 
 ### 5. 🌟 统一配置入口：默认文件或 `-c` 指定配置文件（特有能力）
 
-这是本库区别于标准库 `flag` 的核心特性。`Parse()` 时会自动注册一个隐藏参数 `-c`；未设置 `ConfigFile` 时，需传入配置文件路径。**命令行参数、配置文件、环境变量会在一次解析中按优先级统一合并**，无需手动调用 viper。
+本库的 `FlagSet.Parse` 会自动注册隐藏的 `-c`。需要默认配置路径及可靠的读错误时，**显式调用 `fs.ConfigFile(...)` 启用文件加载**；命令行、环境变量与文件随后按优先级合并，不需要手动调用 viper。未调用 `ConfigFile` 时也可传 `-c`，但这是兼容行为，不能用于严格校验文件读错；调用 `GetConfig()` 还可能创建默认文件。
 
 ```go
 // app.go
-var (
-    Host string
-    Port int
+package main
+
+import (
+    "fmt"
+    "os"
+
+    "github.com/lfhy/flag"
 )
 
-func init() {
-    flag.StringEnvVar(&Host, "host", "APP_HOST", "127.0.0.1", "监听地址")
-    flag.IntConfigVar(&Port, "port", "server", "port", 8080, "服务端口")
-    flag.Parse()
+func main() {
+    fs := flag.NewFlagSet("app", flag.ContinueOnError)
+    fs.ConfigFile("config.toml")
+    var host string
+    var port int
+    fs.Var(&flag.FlagVar{Value: &host, Name: "host", Env: "APP_HOST", DefaultValue: "127.0.0.1", Usage: "监听地址"})
+    fs.New("port").Default(8080).Config("server.port").Var(&port)
+    if err := fs.Parse(os.Args[1:]); err != nil {
+        fmt.Fprintln(os.Stderr, err)
+        os.Exit(2)
+    }
+    fmt.Printf("Host=%s Port=%d\n", host, port)
 }
 ```
 
@@ -188,81 +189,87 @@ func init() {
 port = 9000
 ```
 
-未设置 `ConfigFile` 时，三种来源合并：
+调用 `ConfigFile` 后，同一程序按以下方式合并来源：
 
 ```bash
-# 1. 完全使用配置文件
-$ go run app.go -c config.toml
-# Host=127.0.0.1（默认值）  Port=9000（来自配置文件）
-
-# 2. 命令行覆盖配置文件
-$ go run app.go -c config.toml -port 8888
-# Port=8888（命令行 > 配置文件）
-
-# 3. 环境变量也参与（未在命令行/配置中出现时生效）
-$ APP_HOST=0.0.0.0 go run app.go -c config.toml
-# Host=0.0.0.0（环境变量 > 默认值）
+$ go run app.go
+Host=127.0.0.1 Port=9000
+$ go run app.go -port 8888
+Host=127.0.0.1 Port=8888
+$ APP_HOST=0.0.0.0 go run app.go
+Host=0.0.0.0 Port=9000
 ```
 
-设置默认配置文件后，不传 `-c` 也会自动读取存在的文件；默认文件不存在时跳过读取，显式指定的文件不存在或文件无法解析时返回错误：
-
-```go
-flag.ConfigFile("config.toml") // 在 flag.Parse() 前调用；绑定的配置键仍通过 Config/IntConfigVar 等定义
-```
+已调用 `fs.ConfigFile("config.toml")`：未传 `-c` 时读取存在的默认文件，默认文件不存在时跳过；显式 `-c` 指定的文件不存在、文件不可读或现有文件解析失败时，`Parse` 返回错误。未调用 `ConfigFile` 时，显式 `-c` 指向不存在的文件会跳过读取；若路径已存在则进入旧的读取实现，可能忽略读取或解析错误。单独调用 `fs.GetConfig()` 时旧实现还可能创建其默认的 `config.toml`，并非缺失的 `-c` 路径一定会被创建。
 
 `go run app.go` 使用 `config.toml`；`go run app.go -c other.toml` 则使用显式指定的文件。命令行参数 > 环境变量 > 配置文件 > 默认值的优先级不变。配置路径参数还可链式命名（以下为分别选用的写法）：
 
 ```go
-flag.ConfigFile("config.toml").Name("config")  // 仅 -config，不再提供 -c
-flag.ConfigFile("config.toml").Alias("config") // 同时接受 -c 和 -config
-
 fs := flag.NewFlagSet("app", flag.ContinueOnError)
-fs.ConfigFile("config.toml").Alias("config") // 仅作用于此 FlagSet
+fs.ConfigFile("config.toml").Alias("config") // 接受 -c 和 -config
+// 若只需要 -config：改用 fs.ConfigFile("config.toml").Name("config")
 ```
 
-要点：
-
-- `-c` 是自动注册的隐藏参数，无需手动定义；未设置 `ConfigFile` 且未传路径时跳过文件解析
-- 旧接口 `fs.SetConfigFlagName("conf")` 仍可自定义参数名（FlagSet 级别，互不影响，默认 `"c"`）；若也调用 `.Name(...)`，解析前最后一次命名生效
-- 配置文件按 `ConfigTitle.ConfigKey`（即 `IntConfigVar` 第二、三个参数）的节/键读取
-- 可通过 `flag.DefaultConfigFlagName` 修改默认标志名（默认 `"c"`）
-- 解析完成后用 `flag.GetConfig()` 获取 `*Config`，支持读写回文件
+`fs.SetConfigFlagName("conf")` 仍可在解析前改名；与 `.Name(...)` 同时使用时以最后一次设置为准。配置键由 `FlagVar.ConfigSection` / `ConfigKey` 或链式 `.Config("server.port")` 指定。解析后 `fs.GetConfig()` 可取得当前配置并写回；本节配置示例不执行回写。
 
 ### 6. 别名
 
 ```go
-flag.String("verbose", "false", "详细输出")
-flag.Alias("verbose", "v")     // -v 等价于 --verbose
+fs := flag.NewFlagSet("app", flag.ContinueOnError)
+verbose := fs.New("verbose").Alias("v").Default(false).Bool()
+if err := fs.Parse(os.Args[1:]); err != nil { fmt.Fprintln(os.Stderr, err); os.Exit(2) }
+fmt.Println(*verbose) // -v 与 -verbose 都设置同一个 bool 参数
 ```
 
-链式定义可用 `.Alias("v")`；使用 `flag.Var` 时也可设置 `FlagVar.Aliases`，例如 `flag.Var(&flag.FlagVar{Value: &verbose, Name: "verbose", Aliases: []string{"v"}})`。
+若已有 `var verbose bool`，也可改用 `fs.Var(&flag.FlagVar{Value: &verbose, Name: "verbose", Aliases: []string{"v"}, DefaultValue: false})`；这是与链式写法二选一的注册方式，不要同时定义同名参数。
 
 ### 7. 隐藏参数
 
 ```go
-flag.StringHiddenVar(&token, "token", "", "内部鉴权 Token")
-// 不会出现在 --help 输出中，但 -token=xxx 仍然生效
+var quiet bool
+fs.New("quiet").Default(false).Hidden().Var(&quiet)
+// -quiet 仍可使用，只是不在帮助中显示；隐藏不是权限或保密措施
 ```
 
 ### 8. 子命令
 
-实现 `Cmd` 接口（`Name / Init / Run / Help`）后注册即可：
+`Cmd` 最小只需 `Name() string` 和 `Run(args ...string) error`；`Init(args ...string) error` 可选，用于在运行前解析子命令参数；`Help() string` 也是可选的帮助说明。完整独立示例（保存为 `main.go`，在本模块中运行）：
 
 ```go
-type ServeCmd struct { *flag.FlagSet }
+package main
+
+import (
+    "fmt"
+    "os"
+
+    "github.com/lfhy/flag"
+)
+
+type ServeCmd struct{ port int }
 
 func (*ServeCmd) Name() string { return "serve" }
 func (s *ServeCmd) Init(args ...string) error {
-    s.FlagSet = flag.NewFlagSet("serve", flag.ContinueOnError)
-    // ... 定义子命令参数
-    return s.Parse(args)
+    fs := flag.NewFlagSet("serve", flag.ContinueOnError)
+    fs.New("port").Default(8080).Var(&s.port)
+    return fs.Parse(args)
 }
-func (*ServeCmd) Run(args ...string) error { /* ... */ return nil }
-func (*ServeCmd) Help() string             { return "启动服务" }
+func (s *ServeCmd) Run(args ...string) error {
+    fmt.Println("Port:", s.port)
+    return nil
+}
+func (*ServeCmd) Help() string { return "启动服务" } // 可选
 
-flag.RegisterCommand(&ServeCmd{})
-flag.Parse()
+func main() {
+    root := flag.NewFlagSet("app", flag.ContinueOnError)
+    root.RegisterCommand(&ServeCmd{})
+    if err := root.Run(os.Args[1:]...); err != nil {
+        fmt.Fprintln(os.Stderr, err)
+        os.Exit(2)
+    }
+}
 ```
+
+`go run main.go serve -port=9000` 输出 `Port: 9000`。顶层 `Run` 会在命令名处停止解析并交给子命令的 `Init`；不要先用 `root.Parse(os.Args[1:])` 再 `root.Run(...)`，以免顶层抢先解析子命令选项。
 
 ## 📖 API 速览
 
